@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">ContactMask Safe</string>
+    <string name="accessibility_service_label">ContactMask Safe screen protection</string>
+    <string name="accessibility_service_description">Masks saved contact phone numbers with XXXXXXXXX on supported screens and can replace copied saved numbers with XXXXXXXXX. Processing stays on-device and no data is sent to the Internet.</string>
+    <string name="notification_service_label">ContactMask Safe notification protection</string>
+</resources>
