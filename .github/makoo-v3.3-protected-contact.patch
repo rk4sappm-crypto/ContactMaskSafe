@@ -1,0 +1,497 @@
+diff --git a/app/build.gradle b/app/build.gradle
+index 5230a09..933d82e 100644
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -8,8 +8,8 @@ android {
+         applicationId 'com.example.contactmasksafe'
+         minSdk 22
+         targetSdk 36
+-        versionCode 12
+-        versionName '3.2.1'
++        versionCode 13
++        versionName '3.3.0'
+     }
+ 
+     compileOptions {
+diff --git a/app/src/main/java/com/example/contactmasksafe/AppPreferences.java b/app/src/main/java/com/example/contactmasksafe/AppPreferences.java
+index beaa779..746d82f 100644
+--- a/app/src/main/java/com/example/contactmasksafe/AppPreferences.java
++++ b/app/src/main/java/com/example/contactmasksafe/AppPreferences.java
+@@ -9,6 +9,8 @@ public final class AppPreferences {
+     private static final String KEY_SERVICE_CONNECTED_AT = "service_connected_at";
+     private static final String KEY_LAST_EVENT_AT = "last_event_at";
+     private static final String KEY_LAST_MASK_COUNT = "last_mask_count";
++    private static final String KEY_EASY_SETUP_ACTIVE = "easy_setup_active";
++    private static final String KEY_ACCESSIBILITY_ROUNDTRIP = "accessibility_roundtrip";
+ 
+     private AppPreferences() {
+     }
+@@ -46,6 +48,23 @@ public final class AppPreferences {
+         return preferences(context).getInt(KEY_LAST_MASK_COUNT, 0);
+     }
+ 
++
++    public static boolean isEasySetupActive(Context context) {
++        return preferences(context).getBoolean(KEY_EASY_SETUP_ACTIVE, false);
++    }
++
++    public static void setEasySetupActive(Context context, boolean active) {
++        preferences(context).edit().putBoolean(KEY_EASY_SETUP_ACTIVE, active).apply();
++    }
++
++    public static boolean wasAccessibilityRoundTripStarted(Context context) {
++        return preferences(context).getBoolean(KEY_ACCESSIBILITY_ROUNDTRIP, false);
++    }
++
++    public static void setAccessibilityRoundTripStarted(Context context, boolean started) {
++        preferences(context).edit().putBoolean(KEY_ACCESSIBILITY_ROUNDTRIP, started).apply();
++    }
++
+     private static SharedPreferences preferences(Context context) {
+         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+     }
+diff --git a/app/src/main/java/com/example/contactmasksafe/MainActivity.java b/app/src/main/java/com/example/contactmasksafe/MainActivity.java
+index bbb41d8..33290d4 100644
+--- a/app/src/main/java/com/example/contactmasksafe/MainActivity.java
++++ b/app/src/main/java/com/example/contactmasksafe/MainActivity.java
+@@ -42,6 +42,8 @@ public class MainActivity extends Activity {
+         diagnosticStatus = findViewById(R.id.diagnosticStatus);
+         deviceStatus = findViewById(R.id.deviceStatus);
+         masterSwitch = findViewById(R.id.masterSwitch);
++        easySetupActive = AppPreferences.isEasySetupActive(this);
++        accessibilitySettingsOpened = AppPreferences.wasAccessibilityRoundTripStarted(this);
+ 
+         masterSwitch.setChecked(AppPreferences.isPrivacyShieldEnabled(this));
+         masterSwitch.setOnCheckedChangeListener((button, checked) -> {
+@@ -104,15 +106,23 @@ public class MainActivity extends Activity {
+         super.onResume();
+         if (!AppLockManager.requireUnlocked(this)) return;
+         updateStatus();
+-        if (easySetupActive && accessibilitySettingsOpened) {
+-            accessibilitySettingsOpened = false;
+-            if (hasContacts() && isAccessibilityEnabled()) finishEasySetup();
++        if (easySetupActive) {
++            if (hasContacts() && isAccessibilityEnabled()) {
++                finishEasySetup();
++            } else if (accessibilitySettingsOpened) {
++                accessibilitySettingsOpened = false;
++                AppPreferences.setAccessibilityRoundTripStarted(this, false);
++                updateStatus();
++            }
+         }
+     }
+ 
+     private void startEasySetup() {
+         easySetupActive = true;
++        AppPreferences.setEasySetupActive(this, true);
+         AppPreferences.setPrivacyShieldEnabled(this, true);
+         internalSwitchChange = true;
+         masterSwitch.setChecked(true);
+@@ -136,11 +146,13 @@ public class MainActivity extends Activity {
+     private void finishEasySetup() {
+         easySetupActive = false;
+         accessibilitySettingsOpened = false;
++        AppPreferences.setEasySetupActive(this, false);
++        AppPreferences.setAccessibilityRoundTripStarted(this, false);
+         AppPreferences.setPrivacyShieldEnabled(this, true);
+         repository.invalidate();
+         repository.refreshNow();
+         updateStatus();
+         Toast.makeText(this,
+-                "Setup complete. Saved contact numbers will show as Masked on supported screens.",
++                "Setup complete. Makoo is ready: saved numbers are masked, and opened contact-number screens are protected.",
+                 Toast.LENGTH_LONG).show();
+     }
+@@ -180,6 +192,7 @@ public class MainActivity extends Activity {
+                 + "\nLast scan masks: " + AppPreferences.getLastMaskCount(this)
+                 + "\nIndexed saved numbers: " + count
+                 + "\nMask text: " + PhoneMasker.MASK
++                + "\nProtected Contact Screen: ON"
+                 + "\nInternet permission: NOT REQUESTED");
+     }
+@@ -234,6 +247,10 @@ public class MainActivity extends Activity {
+     private void openAccessibilitySettings(boolean fromEasySetup) {
+         easySetupActive = fromEasySetup || easySetupActive;
+         accessibilitySettingsOpened = true;
++        if (easySetupActive) {
++            AppPreferences.setEasySetupActive(this, true);
++            AppPreferences.setAccessibilityRoundTripStarted(this, true);
++        }
+         AppLockManager.beginTrustedSettingsRoundTrip();
+         Toast.makeText(this,
+                 "Turn on Makoo screen protection, then return here.",
+@@ -293,6 +310,8 @@ public class MainActivity extends Activity {
+                 if (easySetupActive) continueEasySetup();
+             } else {
+                 easySetupActive = false;
++                AppPreferences.setEasySetupActive(this, false);
++                AppPreferences.setAccessibilityRoundTripStarted(this, false);
+                 Toast.makeText(this, "Contacts permission is required to recognise saved numbers.", Toast.LENGTH_LONG).show();
+             }
+         }
+diff --git a/app/src/main/java/com/example/contactmasksafe/PrivacyAccessibilityService.java b/app/src/main/java/com/example/contactmasksafe/PrivacyAccessibilityService.java
+index 773ef37..fd94758 100644
+--- a/app/src/main/java/com/example/contactmasksafe/PrivacyAccessibilityService.java
++++ b/app/src/main/java/com/example/contactmasksafe/PrivacyAccessibilityService.java
+@@ -15,6 +15,11 @@ import android.view.Gravity;
+ import android.view.View;
+ import android.view.WindowManager;
++import android.widget.Button;
++import android.widget.FrameLayout;
++import android.widget.ImageView;
++import android.widget.LinearLayout;
++import android.widget.TextView;
+ import android.view.accessibility.AccessibilityEvent;
+ import android.view.accessibility.AccessibilityNodeInfo;
+ import android.view.accessibility.AccessibilityWindowInfo;
+@@ -41,6 +46,9 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+     private static final long SCROLL_SETTLE_MS = 220L;
+     private static final long SCROLL_RESCAN_MS = 24L;
++    private static final long CONTACT_GATE_ARM_MS = 2400L;
++    private static final long CONTACT_GATE_MIN_SHOW_MS = 350L;
++    private static final long CONTACT_GATE_SUPPRESS_AFTER_BACK_MS = 1400L;
+ 
+     private final Handler handler = new Handler(Looper.getMainLooper());
+     private final List<MaskRegion> stableMasks = new ArrayList<>();
+@@ -61,6 +69,13 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+     private long lastConfirmedMaskAt;
+     private String foregroundPackage = "";
+ 
++    // Full-screen privacy gate shown after the user opens/focuses a saved number.
++    private View contactGateView;
++    private boolean contactGateAttached;
++    private long contactGateArmedUntil;
++    private long contactGateShownAt;
++    private long contactGateSuppressUntil;
++
+     private final Runnable scanRunnable = new Runnable() {
+         @Override
+         public void run() {
+@@ -161,6 +176,25 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+                 && (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                 || eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED);
+ 
++        long eventNow = SystemClock.uptimeMillis();
++        boolean ownPackage = isOwnPackage(foregroundPackage);
++        boolean userOpenOrEditIntent = eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
++                || eventType == AccessibilityEvent.TYPE_VIEW_LONG_CLICKED
++                || eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED
++                || eventType == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED
++                || eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
++                || eventType == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED;
++        if (!ownPackage && userOpenOrEditIntent) {
++            contactGateArmedUntil = eventNow + CONTACT_GATE_ARM_MS;
++        }
++
++        // A hardware/system Back that changes the underlying window should release the gate.
++        if (contactGateAttached && windowChanged
++                && eventNow - contactGateShownAt >= CONTACT_GATE_MIN_SHOW_MS) {
++            hideContactGate();
++            contactGateSuppressUntil = eventNow + 650L;
++        }
++
+         if (eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+             beginScrollGuard(event);
+         }
+@@ -199,8 +233,9 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+ 
+         List<MaskRegion> fastMasks = new ArrayList<>();
+         Set<String> keys = new HashSet<>();
++        ScanSignals fastSignals = new ScanSignals();
+         try {
+-            collectMasks(source, fastMasks, keys, FAST_EVENT_NODES);
++            collectMasks(source, fastMasks, keys, FAST_EVENT_NODES, fastSignals);
+         } finally {
+             // collectMasks recycles the root and all children it traverses.
+         }
+@@ -208,10 +243,18 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+         if (!fastMasks.isEmpty()) {
+             mergeFastMasks(fastMasks);
+-            lastConfirmedMaskAt = SystemClock.uptimeMillis();
++            long now = SystemClock.uptimeMillis();
++            lastConfirmedMaskAt = now;
+             endTransitionCurtain();
+             render();
++
++            // Editing a saved number is privacy-sensitive even if the event sequence did
++            // not include a preceding click. Protect immediately.
++            if (fastSignals.editableSensitive && !isOwnPackage(foregroundPackage)
++                    && now >= contactGateSuppressUntil) {
++                showContactGate();
++            }
+         }
+     }
+@@ -229,6 +272,7 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+         ensureOverlayAttached();
+         List<MaskRegion> found = new ArrayList<>();
+         Set<String> keys = new HashSet<>();
++        ScanSignals signals = new ScanSignals();
+         int remainingNodes = MAX_NODES;
+ 
+         List<AccessibilityWindowInfo> windows = getWindows();
+@@ -239,12 +283,12 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+                 if (window == null || found.size() >= MAX_MASKS || remainingNodes <= 0) continue;
+                 AccessibilityNodeInfo root = window.getRoot();
+                 if (root == null) continue;
+-                int visited = collectMasks(root, found, keys, remainingNodes);
++                int visited = collectMasks(root, found, keys, remainingNodes, signals);
+                 remainingNodes -= visited;
+             }
+         } else {
+             AccessibilityNodeInfo root = getRootInActiveWindow();
+-            if (root != null) collectMasks(root, found, keys, remainingNodes);
++            if (root != null) collectMasks(root, found, keys, remainingNodes, signals);
+         }
+ 
+         long now = SystemClock.uptimeMillis();
+@@ -261,6 +305,22 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+             stableMasks.clear();
+         }
+ 
++        boolean sensitiveVisible = !found.isEmpty();
++        boolean shouldOpenGate = sensitiveVisible
++                && !isOwnPackage(foregroundPackage)
++                && now >= contactGateSuppressUntil
++                && (signals.editableSensitive || now <= contactGateArmedUntil);
++
++        if (contactGateAttached) {
++            // Keep the privacy screen stable until Back is used or the sensitive screen
++            // disappears. Accessibility overlays remain able to inspect the app below.
++            if (!sensitiveVisible || isOwnPackage(foregroundPackage)) hideContactGate();
++        } else if (shouldOpenGate) {
++            showContactGate();
++        }
++
+         render();
+         AppPreferences.recordAccessibilityEvent(this, stableMasks.size());
+     }
+@@ -274,7 +334,8 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+     private int collectMasks(AccessibilityNodeInfo root,
+                              List<MaskRegion> output,
+                              Set<String> keys,
+-                             int nodeLimit) {
++                             int nodeLimit,
++                             ScanSignals signals) {
+         if (root == null || nodeLimit <= 0) return 0;
+         ArrayDeque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
+         queue.add(root);
+@@ -301,6 +362,10 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+                 }
+ 
+                 if (sensitive) {
++                    if (signals != null) {
++                        signals.sensitiveFound = true;
++                        if (node.isEditable()) signals.editableSensitive = true;
++                    }
+                     Rect bounds = new Rect();
+                     node.getBoundsInScreen(bounds);
+                     addRegion(output, keys, bounds);
+@@ -416,6 +481,122 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+                 || value.endsWith(".phone");
+     }
+ 
++    private boolean isOwnPackage(String packageName) {
++        return packageName != null && packageName.equals(getPackageName());
++    }
++
++    private void showContactGate() {
++        if (contactGateAttached || windowManager == null) return;
++        if (contactGateView == null) contactGateView = buildContactGateView();
++
++        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
++                WindowManager.LayoutParams.MATCH_PARENT,
++                WindowManager.LayoutParams.MATCH_PARENT,
++                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
++                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
++                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
++                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
++                        | WindowManager.LayoutParams.FLAG_SECURE,
++                PixelFormat.TRANSLUCENT
++        );
++        lp.gravity = Gravity.TOP | Gravity.START;
++        if (Build.VERSION.SDK_INT >= 28) {
++            lp.layoutInDisplayCutoutMode =
++                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
++        }
++
++        try {
++            windowManager.addView(contactGateView, lp);
++            contactGateAttached = true;
++            contactGateShownAt = SystemClock.uptimeMillis();
++            contactGateArmedUntil = 0L;
++        } catch (RuntimeException ignored) {
++            contactGateAttached = false;
++        }
++    }
++
++    private View buildContactGateView() {
++        FrameLayout root = new FrameLayout(this);
++        root.setBackgroundColor(Color.BLACK);
++        root.setClickable(true);
++        root.setSystemUiVisibility(
++                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
++                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
++                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
++                        | View.SYSTEM_UI_FLAG_FULLSCREEN
++                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
++                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
++
++        LinearLayout content = new LinearLayout(this);
++        content.setOrientation(LinearLayout.VERTICAL);
++        content.setGravity(Gravity.CENTER);
++        content.setPadding(dp(28), dp(28), dp(28), dp(28));
++        FrameLayout.LayoutParams contentLp = new FrameLayout.LayoutParams(
++                FrameLayout.LayoutParams.MATCH_PARENT,
++                FrameLayout.LayoutParams.MATCH_PARENT);
++        root.addView(content, contentLp);
++
++        ImageView logo = new ImageView(this);
++        logo.setImageResource(R.drawable.makoo_logo);
++        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
++        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(170), dp(170));
++        content.addView(logo, logoLp);
++
++        TextView title = new TextView(this);
++        title.setText("Protected Contact Screen");
++        title.setTextColor(Color.WHITE);
++        title.setTextSize(22f);
++        title.setGravity(Gravity.CENTER);
++        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
++                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
++        titleLp.topMargin = dp(24);
++        content.addView(title, titleLp);
++
++        TextView message = new TextView(this);
++        message.setText("Makoo is hiding this saved contact number. Use Go Back to return without revealing it.");
++        message.setTextColor(Color.LTGRAY);
++        message.setTextSize(15f);
++        message.setGravity(Gravity.CENTER);
++        LinearLayout.LayoutParams messageLp = new LinearLayout.LayoutParams(
++                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
++        messageLp.topMargin = dp(10);
++        content.addView(message, messageLp);
++
++        Button back = new Button(this);
++        back.setText("Go Back");
++        back.setTextSize(18f);
++        back.setTextColor(Color.BLACK);
++        back.setBackgroundColor(Color.WHITE);
++        LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(
++                LinearLayout.LayoutParams.MATCH_PARENT, dp(58));
++        backLp.topMargin = dp(34);
++        backLp.leftMargin = dp(22);
++        backLp.rightMargin = dp(22);
++        content.addView(back, backLp);
++        back.setOnClickListener(v -> {
++            long now = SystemClock.uptimeMillis();
++            contactGateSuppressUntil = now + CONTACT_GATE_SUPPRESS_AFTER_BACK_MS;
++            contactGateArmedUntil = 0L;
++            hideContactGate();
++            performGlobalAction(GLOBAL_ACTION_BACK);
++            handler.postDelayed(followUpScan1, 80L);
++            handler.postDelayed(followUpScan2, 300L);
++        });
++
++        TextView credit = new TextView(this);
++        credit.setText("Designed and Developed by UCPL Technologies");
++        credit.setTextColor(Color.GRAY);
++        credit.setTextSize(13f);
++        credit.setGravity(Gravity.CENTER);
++        LinearLayout.LayoutParams creditLp = new LinearLayout.LayoutParams(
++                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
++        creditLp.topMargin = dp(28);
++        content.addView(credit, creditLp);
++        return root;
++    }
++
++    private void hideContactGate() {
++        if (contactGateAttached && windowManager != null && contactGateView != null) {
++            try { windowManager.removeViewImmediate(contactGateView); }
++            catch (RuntimeException ignored) { }
++        }
++        contactGateAttached = false;
++        contactGateShownAt = 0L;
++    }
++
++    private int dp(int value) {
++        return Math.round(value * getResources().getDisplayMetrics().density);
++    }
++
+     private void ensureOverlayAttached() {
+         if (windowManager == null) return;
+         if (maskLayerView == null) maskLayerView = new MaskLayerView();
+@@ -464,6 +645,9 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+     }
+ 
+     private void detachOverlay() {
++        hideContactGate();
++        contactGateArmedUntil = 0L;
++        contactGateSuppressUntil = 0L;
+         stableMasks.clear();
+         lastConfirmedMaskAt = 0L;
+         transitionCurtain = false;
+@@ -495,6 +679,11 @@ public class PrivacyAccessibilityService extends AccessibilityService {
+         super.onDestroy();
+     }
+ 
++    private static final class ScanSignals {
++        boolean sensitiveFound;
++        boolean editableSensitive;
++    }
++
+     private static final class MaskRegion {
+         final Rect bounds;
+         MaskRegion(Rect bounds) { this.bounds = bounds; }
+diff --git a/app/src/main/res/layout/activity_main.xml b/app/src/main/res/layout/activity_main.xml
+index e4c1cdc..42769ce 100644
+--- a/app/src/main/res/layout/activity_main.xml
++++ b/app/src/main/res/layout/activity_main.xml
+@@ -8,10 +8,18 @@
+         android:layout_height="wrap_content"
+         android:orientation="vertical"
+         android:padding="20dp">
+-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Makoo 3.1" android:textColor="#111827" android:textSize="29sp" android:textStyle="bold" />
++        <ImageView
++            android:layout_width="96dp"
++            android:layout_height="96dp"
++            android:layout_gravity="center_horizontal"
++            android:adjustViewBounds="true"
++            android:contentDescription="@string/logo_content_description"
++            android:scaleType="fitCenter"
++            android:src="@drawable/makoo_logo" />
++        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Makoo 3.3" android:textColor="#111827" android:textSize="29sp" android:textStyle="bold" />
+         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Password-protected local privacy shield" android:textColor="#4B5563" android:textSize="16sp" />
+         <TextView android:id="@+id/deviceStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="#E8F0FE" android:padding="12dp" android:text="Device compatibility: checking" android:textColor="#1F2937" android:textSize="13sp" />
+-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="#FFF7ED" android:padding="12dp" android:text="One-Tap Setup starts the guided setup. Android will still show its own Contacts and Accessibility confirmation screens; those security taps cannot be bypassed." android:textColor="#7C2D12" android:textSize="14sp" />
+-        <Button android:id="@+id/btnEasySetup" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="60dp" android:layout_marginTop="14dp" android:text="One-Tap Setup" android:textAllCaps="false" android:textSize="18sp" android:textStyle="bold" />
++        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="#FFF7ED" android:padding="12dp" android:text="Tap One-Tap Guided Setup once. Makoo will automatically move through every required app step and open the next Android settings screen for you. Android still requires you to approve its own Contacts and Accessibility security confirmations." android:textColor="#7C2D12" android:textSize="14sp" />
++        <Button android:id="@+id/btnEasySetup" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="60dp" android:layout_marginTop="14dp" android:text="One-Tap Guided Setup" android:textAllCaps="false" android:textSize="18sp" android:textStyle="bold" />
+@@ -33,7 +41,7 @@
+         <Button android:id="@+id/btnProtectedUninstall" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="Protected Uninstall / Maintenance" android:textAllCaps="false" />
+         <TextView android:id="@+id/diagnosticStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:background="#ECFDF5" android:padding="14dp" android:text="Live diagnostic: checking" android:textColor="#1F2937" android:textSize="14sp" />
+-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:padding="12dp" android:text="Privacy: Makoo does not request Internet access and does not edit, delete or upload contacts. It indexes saved phone numbers locally and masks supported visible saved numbers with the word Masked. Unsaved numbers remain visible." android:textColor="#374151" android:textSize="14sp" />
++        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:padding="12dp" android:text="Privacy: Makoo does not request Internet access and does not edit, delete or upload contacts. Saved numbers are masked in lists. When a saved phone number is opened or focused for viewing/editing in a supported app, Makoo covers the entire display with a black Protected Contact Screen, your logo, and a Go Back button." android:textColor="#374151" android:textSize="14sp" />
+diff --git a/app/src/main/res/layout/activity_unlock.xml b/app/src/main/res/layout/activity_unlock.xml
+index 42451d6..a087df8 100644
+--- a/app/src/main/res/layout/activity_unlock.xml
++++ b/app/src/main/res/layout/activity_unlock.xml
+@@ -11,7 +11,8 @@
+         android:orientation="vertical"
+         android:gravity="center_horizontal"
+         android:padding="24dp">
+-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="56dp" android:text="Makoo" android:textAlignment="center" android:textColor="#111827" android:textSize="30sp" android:textStyle="bold" />
++        <ImageView android:layout_width="112dp" android:layout_height="112dp" android:layout_marginTop="40dp" android:contentDescription="@string/logo_content_description" android:scaleType="fitCenter" android:src="@drawable/makoo_logo" />
++        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Makoo" android:textAlignment="center" android:textColor="#111827" android:textSize="30sp" android:textStyle="bold" />
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index 9a3782d..9b1720b 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -1,6 +1,6 @@
+ <resources>
+     <string name="app_name">Makoo</string>
+     <string name="accessibility_service_label">Makoo screen protection</string>
+-    <string name="accessibility_service_description">Masks saved contact phone numbers with the word Masked on supported screens and can replace copied saved numbers with Masked. Processing stays on-device and no data is sent to the Internet.</string>
++    <string name="accessibility_service_description">Masks saved contact phone numbers and, when a saved number is opened or focused for viewing/editing on a supported screen, can cover the entire screen with a black Makoo privacy screen and Go Back control. Processing stays on-device and no data is sent to the Internet.</string>
+     <string name="notification_service_label">Makoo notification protection</string>
+     <string name="logo_content_description">Makoo logo</string>
+     <string name="developer_credit">Designed and Developed by UCPL Technologies</string>
