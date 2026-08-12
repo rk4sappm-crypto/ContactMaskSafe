@@ -1,0 +1,224 @@
+--- a/app/src/main/java/com/example/contactmasksafe/PrivacyAccessibilityService.java
++++ b/app/src/main/java/com/example/contactmasksafe/PrivacyAccessibilityService.java
+@@ -39,6 +39,8 @@
+     private static final int MAX_MASKS = 100;
+     private static final long EMPTY_FRAME_HOLD_MS = 1400L;
+     private static final long TRANSITION_GUARD_MS = 650L;
++    private static final long SCROLL_SETTLE_MS = 220L;
++    private static final long SCROLL_RESCAN_MS = 24L;
+ 
+     private final Handler handler = new Handler(Looper.getMainLooper());
+     private final List<MaskRegion> stableMasks = new ArrayList<>();
+@@ -49,6 +51,10 @@
+     private boolean overlayAttached;
+     private boolean scanQueued;
+     private boolean transitionCurtain;
++    private boolean scrollGuard;
++    private boolean scrollVertical = true;
++    private boolean scrollFallbackCurtain;
++    private long lastScrollAt;
+     private long lastConfirmedMaskAt;
+     private String foregroundPackage = "";
+ 
+@@ -80,6 +86,34 @@
+         }
+     };
+ 
++    private final Runnable rapidScrollScanRunnable = new Runnable() {
++        @Override
++        public void run() {
++            if (!scrollGuard || !AppPreferences.isPrivacyShieldEnabled(PrivacyAccessibilityService.this)) return;
++            scanVisibleWindows();
++            handler.postDelayed(this, SCROLL_RESCAN_MS);
++        }
++    };
++
++    private final Runnable finishScrollGuardRunnable = new Runnable() {
++        @Override
++        public void run() {
++            long elapsed = SystemClock.uptimeMillis() - lastScrollAt;
++            if (elapsed < SCROLL_SETTLE_MS) {
++                handler.postDelayed(this, SCROLL_SETTLE_MS - elapsed);
++                return;
++            }
++            // Refresh positions while the guard is still visible, then reveal the
++            // settled screen only after the exact masks have moved into place.
++            scanVisibleWindows();
++            scrollGuard = false;
++            scrollFallbackCurtain = false;
++            handler.removeCallbacks(rapidScrollScanRunnable);
++            render();
++            handler.postDelayed(followUpScan1, 60L);
++        }
++    };
++
+     @Override
+     protected void onServiceConnected() {
+         super.onServiceConnected();
+@@ -117,12 +151,17 @@
+             foregroundPackage = event.getPackageName().toString();
+         }
+ 
++        int eventType = event == null ? 0 : event.getEventType();
+         boolean packageChanged = !oldPackage.isEmpty()
+                 && !foregroundPackage.isEmpty()
+                 && !oldPackage.equals(foregroundPackage);
+         boolean windowChanged = event != null
+-                && (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+-                || event.getEventType() == AccessibilityEvent.TYPE_WINDOWS_CHANGED);
++                && (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
++                || eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED);
++
++        if (eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
++            beginScrollGuard(event);
++        }
+ 
+         // Phone/Contacts transitions may draw the real number before their complete
+         // accessibility tree is ready. A very short privacy curtain hides that first frame.
+@@ -201,6 +240,7 @@
+             stableMasks.clear();
+             stableMasks.addAll(found);
+             lastConfirmedMaskAt = now;
++            scrollFallbackCurtain = false;
+             endTransitionCurtain();
+         } else if (!stableMasks.isEmpty() && now - lastConfirmedMaskAt > EMPTY_FRAME_HOLD_MS) {
+             // Keep the last confirmed mask through short OEM/data-binding empty frames.
+@@ -291,6 +331,31 @@
+         }
+     }
+ 
++    private void beginScrollGuard(AccessibilityEvent event) {
++        scrollGuard = true;
++        lastScrollAt = SystemClock.uptimeMillis();
++
++        // Most contact screens scroll vertically. Android 9+ supplies scroll deltas,
++        // allowing horizontal carousels to use a horizontal protection band instead.
++        scrollVertical = true;
++        if (Build.VERSION.SDK_INT >= 28 && event != null) {
++            int dx = Math.abs(event.getScrollDeltaX());
++            int dy = Math.abs(event.getScrollDeltaY());
++            if (dx > dy && dx > 0) scrollVertical = false;
++        }
++
++        // If a Phone/Contacts screen has no confirmed mask yet, cover the whole frame
++        // until the first post-scroll scan finds the saved number. This prevents a new
++        // number entering the viewport from appearing for a frame.
++        scrollFallbackCurtain = stableMasks.isEmpty() && isPhoneOrContactsPackage(foregroundPackage);
++
++        handler.removeCallbacks(finishScrollGuardRunnable);
++        handler.postDelayed(finishScrollGuardRunnable, SCROLL_SETTLE_MS);
++        handler.removeCallbacks(rapidScrollScanRunnable);
++        handler.postAtFrontOfQueue(rapidScrollScanRunnable);
++        render();
++    }
++
+     private void beginTransitionCurtain() {
+         transitionCurtain = true;
+         handler.removeCallbacks(clearTransitionCurtainRunnable);
+@@ -350,14 +415,19 @@
+     private void render() {
+         ensureOverlayAttached();
+         if (maskLayerView == null) return;
+-        maskLayerView.setState(stableMasks, transitionCurtain);
++        maskLayerView.setState(stableMasks, transitionCurtain, scrollGuard, scrollVertical, scrollFallbackCurtain);
+     }
+ 
+     private void detachOverlay() {
+         stableMasks.clear();
+         lastConfirmedMaskAt = 0L;
+         transitionCurtain = false;
++        scrollGuard = false;
++        scrollFallbackCurtain = false;
++        lastScrollAt = 0L;
+         handler.removeCallbacks(clearTransitionCurtainRunnable);
++        handler.removeCallbacks(finishScrollGuardRunnable);
++        handler.removeCallbacks(rapidScrollScanRunnable);
+         if (overlayAttached && windowManager != null && maskLayerView != null) {
+             try { windowManager.removeViewImmediate(maskLayerView); }
+             catch (RuntimeException ignored) { }
+@@ -388,6 +458,9 @@
+         private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+         private List<MaskRegion> masks = new ArrayList<>();
+         private boolean curtain;
++        private boolean scrolling;
++        private boolean verticalScroll;
++        private boolean fallbackCurtain;
+ 
+         MaskLayerView() {
+             super(PrivacyAccessibilityService.this);
+@@ -402,9 +475,13 @@
+             textPaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+         }
+ 
+-        void setState(List<MaskRegion> source, boolean showCurtain) {
++        void setState(List<MaskRegion> source, boolean showCurtain, boolean showScrollGuard,
++                      boolean isVerticalScroll, boolean showFallbackCurtain) {
+             masks = new ArrayList<>(source);
+             curtain = showCurtain;
++            scrolling = showScrollGuard;
++            verticalScroll = isVerticalScroll;
++            fallbackCurtain = showFallbackCurtain;
+             invalidate();
+         }
+ 
+@@ -422,6 +499,47 @@
+                 return;
+             }
+ 
++            if (scrolling) {
++                if (fallbackCurtain && masks.isEmpty()) {
++                    canvas.drawColor(Color.rgb(17, 24, 39));
++                    String message = "Protecting while scrolling…";
++                    textPaint.setTextSize(16f * getResources().getDisplayMetrics().scaledDensity);
++                    Paint.FontMetrics fm = textPaint.getFontMetrics();
++                    float x = Math.max(24f, (getWidth() - textPaint.measureText(message)) / 2f);
++                    float y = getHeight() / 2f - (fm.ascent + fm.descent) / 2f;
++                    canvas.drawText(message, x, y, textPaint);
++                    return;
++                }
++
++                // Expand each confirmed mask in the direction of movement. During a
++                // vertical scroll the number can move anywhere up/down but keeps the
++                // same X position, so a vertical lane prevents it escaping the mask.
++                float margin = 12f * getResources().getDisplayMetrics().density;
++                for (MaskRegion region : masks) {
++                    Rect b = region.bounds;
++                    RectF lane;
++                    if (verticalScroll) {
++                        lane = new RectF(Math.max(0, b.left - margin), 0,
++                                Math.min(getWidth(), b.right + margin), getHeight());
++                    } else {
++                        lane = new RectF(0, Math.max(0, b.top - margin),
++                                getWidth(), Math.min(getHeight(), b.bottom + margin));
++                    }
++                    canvas.drawRect(lane, backgroundPaint);
++                    String label = PhoneMasker.MASK;
++                    textPaint.setTextSize(14f * getResources().getDisplayMetrics().scaledDensity);
++                    Paint.FontMetrics fm = textPaint.getFontMetrics();
++                    float tx = verticalScroll
++                            ? Math.max(lane.left + 6f, lane.centerX() - textPaint.measureText(label) / 2f)
++                            : Math.max(6f, (getWidth() - textPaint.measureText(label)) / 2f);
++                    float ty = verticalScroll
++                            ? getHeight() / 2f - (fm.ascent + fm.descent) / 2f
++                            : lane.centerY() - (fm.ascent + fm.descent) / 2f;
++                    canvas.drawText(label, tx, ty, textPaint);
++                }
++                if (!masks.isEmpty()) return;
++            }
++
+             for (MaskRegion region : masks) {
+                 Rect b = region.bounds;
+                 RectF area = new RectF(
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -8,8 +8,8 @@
+         applicationId 'com.example.contactmasksafe'
+         minSdk 22
+         targetSdk 36
+-        versionCode 9
+-        versionName '3.1.1'
++        versionCode 10
++        versionName '3.1.2'
+     }
+ 
+     compileOptions {
