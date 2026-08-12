@@ -1,37 +1,49 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/rootScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F7FB"
+    android:background="#F7F9FC"
     android:fillViewport="true">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ContactMask Safe 3.1" android:textColor="#111827" android:textSize="29sp" android:textStyle="bold" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Password-protected local privacy shield" android:textColor="#4B5563" android:textSize="16sp" />
-        <TextView android:id="@+id/deviceStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="#E8F0FE" android:padding="12dp" android:text="Device compatibility: checking" android:textColor="#1F2937" android:textSize="13sp" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="#FFF7ED" android:padding="12dp" android:text="One-Tap Setup starts the guided setup. Android will still show its own Contacts and Accessibility confirmation screens; those security taps cannot be bypassed." android:textColor="#7C2D12" android:textSize="14sp" />
-        <Button android:id="@+id/btnEasySetup" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="60dp" android:layout_marginTop="14dp" android:text="One-Tap Setup" android:textAllCaps="false" android:textSize="18sp" android:textStyle="bold" />
-        <TextView android:id="@+id/setupProgressStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="#ECFDF5" android:padding="12dp" android:text="SETUP PROGRESS • checking" android:textColor="#065F46" android:textSize="16sp" android:textStyle="bold" />
-        <Switch android:id="@+id/masterSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:checked="true" android:padding="10dp" android:text="Privacy Shield enabled" android:textColor="#111827" android:textSize="17sp" android:textStyle="bold" />
-        <TextView android:id="@+id/contactPermissionStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="#FFFFFF" android:padding="12dp" android:text="Contacts: checking" android:textColor="#374151" />
-        <TextView android:id="@+id/accessibilityStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="#FFFFFF" android:padding="12dp" android:text="Screen protection: checking" android:textColor="#374151" />
-        <TextView android:id="@+id/notificationStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="#FFFFFF" android:padding="12dp" android:text="Notification protection: checking" android:textColor="#374151" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:text="Protection tools" android:textColor="#111827" android:textSize="18sp" android:textStyle="bold" />
-        <Button android:id="@+id/btnSelfTest" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="10dp" android:text="Test Masking Now" android:textAllCaps="false" />
-        <Button android:id="@+id/btnOpenPhone" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="Open Phone App to Test Protection" android:textAllCaps="false" />
-        <Button android:id="@+id/btnContacts" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="Open Names-Only Contacts" android:textAllCaps="false" />
-        <Button android:id="@+id/btnRefreshStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="Refresh Protection Status" android:textAllCaps="false" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:text="Manual setup / compatibility" android:textColor="#111827" android:textSize="18sp" android:textStyle="bold" />
-        <Button android:id="@+id/btnAccessibility" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="10dp" android:text="Open Accessibility Settings" android:textAllCaps="false" />
-        <Button android:id="@+id/btnNotificationAccess" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="Optional: Enable Notification Protection" android:textAllCaps="false" />
-        <Button android:id="@+id/btnAppSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="App Info / Fix Restricted Setting" android:textAllCaps="false" />
-        <Button android:id="@+id/btnProtectedUninstall" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="Protected Uninstall / Maintenance" android:textAllCaps="false" />
-        <TextView android:id="@+id/diagnosticStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:background="#ECFDF5" android:padding="14dp" android:text="Live diagnostic: checking" android:textColor="#1F2937" android:textSize="14sp" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:padding="12dp" android:text="Privacy: ContactMask Safe does not request Internet access and does not edit, delete or upload contacts. It indexes saved phone numbers locally and masks supported visible saved numbers with the word Masked. Unsaved numbers remain visible." android:textColor="#374151" android:textSize="14sp" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:padding="12dp" android:text="Security: the owner password is required to open the app, pause Privacy Shield, and use the in-app uninstall path. Android itself still controls permission confirmations and system uninstall. On some sideloaded Android 13+ phones, App Info → Allow restricted settings may be needed before Accessibility can be enabled." android:textColor="#991B1B" android:textSize="14sp" android:textStyle="bold" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:padding="12dp" android:paddingBottom="24dp" android:text="Android limitation: no ordinary non-root app can guarantee masking inside every dialer, lock screen, secure window, WhatsApp screen or OEM interface. If another app does not expose its text to Android Accessibility, the number cannot be reliably covered there." android:textColor="#991B1B" android:textSize="14sp" />
+        android:padding="18dp">
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ContactMask Safe 3.2" android:textColor="#111827" android:textSize="28sp" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Universal Privacy Shield • Anti-Blink • ScrollSafe" android:textColor="#475569" android:textSize="15sp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:background="#E8F0FE" android:padding="14dp" android:text="Smart setup remembers your progress and continues after Android permission screens. Android still requires you to approve Contacts and Accessibility yourself; those security confirmations cannot be bypassed." android:textColor="#1F2937" android:textSize="14sp" />
+
+        <Button android:id="@+id/btnEasySetup" android:layout_width="match_parent" android:layout_height="62dp" android:layout_marginTop="12dp" android:text="Start Smart One-Tap Setup" android:textAllCaps="false" android:textSize="18sp" android:textStyle="bold" />
+
+        <TextView android:id="@+id/setupProgressStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="#ECFDF5" android:padding="12dp" android:text="SMART SETUP • checking" android:textColor="#065F46" android:textSize="15sp" android:textStyle="bold" />
+
+        <Switch android:id="@+id/masterSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:layout_marginTop="12dp" android:padding="10dp" android:text="Privacy Shield enabled" android:textColor="#111827" android:textSize="17sp" android:textStyle="bold" />
+
+        <TextView android:id="@+id/contactPermissionStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp" android:background="#FFFFFF" android:text="Contacts: checking" android:textColor="#374151" />
+        <TextView android:id="@+id/accessibilityStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:padding="10dp" android:background="#FFFFFF" android:text="Screen protection: checking" android:textColor="#374151" />
+        <TextView android:id="@+id/notificationStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:padding="10dp" android:background="#FFFFFF" android:text="Notification protection: checking" android:textColor="#374151" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="Compatibility Assistant" android:textColor="#111827" android:textSize="18sp" android:textStyle="bold" />
+        <TextView android:id="@+id/compatibilityStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="#FFF7ED" android:padding="12dp" android:text="Checking device compatibility…" android:textColor="#7C2D12" android:textSize="13sp" />
+        <Button android:id="@+id/btnCompatibilityCheck" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Run Compatibility Assistant" android:textAllCaps="false" />
+        <Button android:id="@+id/btnBackgroundSettings" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Background / Battery Settings" android:textAllCaps="false" />
+
+        <TextView android:id="@+id/diagnosticStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="#F1F5F9" android:padding="12dp" android:text="Protection health: checking" android:textColor="#334155" android:textSize="13sp" />
+        <Button android:id="@+id/btnSelfTest" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="10dp" android:text="Test Masking Now" android:textAllCaps="false" android:textStyle="bold" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="Optional / Advanced" android:textColor="#111827" android:textSize="18sp" android:textStyle="bold" />
+        <Button android:id="@+id/btnAccessibility" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Open Accessibility Settings" android:textAllCaps="false" />
+        <Button android:id="@+id/btnNotificationAccess" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Enable Notification Protection" android:textAllCaps="false" />
+        <Button android:id="@+id/btnAppSettings" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="App Info / Fix Restricted Setting" android:textAllCaps="false" />
+        <Button android:id="@+id/btnRefreshStatus" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Refresh Protection Health" android:textAllCaps="false" />
+        <Button android:id="@+id/btnContacts" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Names-Only Contacts" android:textAllCaps="false" />
+        <Button android:id="@+id/btnCallLog" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Protected Call Log" android:textAllCaps="false" />
+        <Button android:id="@+id/btnProtectedUninstall" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="Protected Uninstall / Maintenance" android:textAllCaps="false" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:padding="12dp" android:text="Protection: saved contact numbers are detected locally and covered with “Masked” on supported screens. Unsaved numbers stay visible. Anti-Blink keeps masks attached during redraws, and ScrollSafe protects moving numbers while a list is being scrolled." android:textColor="#4B5563" android:textSize="14sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:padding="12dp" android:text="Compatibility: designed for Android 5.1 (API 22) through current Android versions, including phones, tablets and foldables. OEM interfaces differ, so no ordinary non-root app can guarantee masking inside every secure/hidden screen that Android does not expose to Accessibility." android:textColor="#7C2D12" android:textSize="13sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:padding="12dp" android:paddingBottom="24dp" android:text="Security: the owner password is required to open the app, pause Privacy Shield, and use the in-app uninstall path. System installation/uninstallation and sensitive permission confirmations remain controlled by Android." android:textColor="#9B1C1C" android:textSize="13sp" android:textStyle="bold" />
     </LinearLayout>
 </ScrollView>
