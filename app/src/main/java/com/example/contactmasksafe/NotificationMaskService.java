@@ -82,8 +82,6 @@ public class NotificationMaskService extends NotificationListenerService {
                 || differs(subText, safeSubText)
                 || extraMask.changed;
         if (!changed) {
-            // If the source app updates the same notification so that it is no longer
-            // sensitive, remove any older redacted replacement for that key.
             if (notificationManager != null) {
                 notificationManager.cancel(NOTIFICATION_TAG, replacementId(sbn.getKey()));
             }
@@ -107,7 +105,7 @@ public class NotificationMaskService extends NotificationListenerService {
                 .setContentText(safeText)
                 .setSubText(safeSubText)
                 .setWhen(original.when)
-                .setShowWhen(original.showsTime())
+                .setShowWhen(true)
                 .setAutoCancel((original.flags & Notification.FLAG_AUTO_CANCEL) != 0)
                 .setOngoing((original.flags & Notification.FLAG_ONGOING_EVENT) != 0)
                 .setOnlyAlertOnce(true)
@@ -136,8 +134,7 @@ public class NotificationMaskService extends NotificationListenerService {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH
                 && original.actions != null) {
             for (Notification.Action action : original.actions) {
-                if (action != null
-                        && !PhoneMasker.containsSavedNumber(action.title, repository)) {
+                if (action != null && !PhoneMasker.containsSavedNumber(action.title, repository)) {
                     builder.addAction(action);
                 }
             }
@@ -157,7 +154,6 @@ public class NotificationMaskService extends NotificationListenerService {
             if (originalKey != null) {
                 decrementIntentionalCancel(originalKey);
             }
-            // Notification access or posting permission may have been revoked.
         }
     }
 
@@ -170,7 +166,6 @@ public class NotificationMaskService extends NotificationListenerService {
         String key = sbn.getKey();
         if (key != null && hasIntentionalCancel(key)) {
             decrementIntentionalCancel(key);
-            // We removed the unsafe original ourselves. Keep the redacted replacement.
             return;
         }
         notificationManager.cancel(NOTIFICATION_TAG, replacementId(key));
@@ -196,17 +191,13 @@ public class NotificationMaskService extends NotificationListenerService {
             try {
                 getContentResolver().unregisterContentObserver(contactsObserver);
             } catch (RuntimeException ignored) {
-                // Observer may already be unregistered by the system.
             }
         }
         super.onDestroy();
     }
 
     private ExtraMaskResult maskStructuredMessageExtras(Bundle extras) {
-        if (extras == null) {
-            return ExtraMaskResult.EMPTY;
-        }
-
+        if (extras == null) return ExtraMaskResult.EMPTY;
         StringBuilder safe = new StringBuilder();
         boolean changed = false;
 
@@ -222,32 +213,23 @@ public class NotificationMaskService extends NotificationListenerService {
         Parcelable[] messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES);
         if (messages != null) {
             for (Parcelable parcelable : messages) {
-                if (!(parcelable instanceof Bundle)) {
-                    continue;
-                }
+                if (!(parcelable instanceof Bundle)) continue;
                 Bundle message = (Bundle) parcelable;
                 CharSequence sender = message.getCharSequence("sender");
                 CharSequence messageText = message.getCharSequence("text");
                 String safeSender = PhoneMasker.redactSavedNumbers(sender, repository);
                 String safeMessage = PhoneMasker.redactSavedNumbers(messageText, repository);
                 changed |= differs(sender, safeSender) || differs(messageText, safeMessage);
-                String combined = safeSender.isEmpty()
-                        ? safeMessage
-                        : safeSender + ": " + safeMessage;
-                appendLine(safe, combined);
+                appendLine(safe, safeSender.isEmpty() ? safeMessage : safeSender + ": " + safeMessage);
             }
         }
-
         return new ExtraMaskResult(changed, safe.toString());
     }
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && notificationManager != null) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "Masked notifications",
-                    NotificationManager.IMPORTANCE_LOW
-            );
+                    CHANNEL_ID, "Masked notifications", NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("Notifications re-posted after saved contact numbers are redacted.");
             channel.enableVibration(false);
             channel.setSound(null, null);
@@ -256,16 +238,11 @@ public class NotificationMaskService extends NotificationListenerService {
     }
 
     private boolean canPostReplacementNotification() {
-        if (notificationManager == null) {
-            return false;
-        }
+        if (notificationManager == null) return false;
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-            return false;
-        }
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.N
-                || notificationManager.areNotificationsEnabled();
+                != PackageManager.PERMISSION_GRANTED) return false;
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.N || notificationManager.areNotificationsEnabled();
     }
 
     private String applicationLabel(String packageName) {
@@ -287,12 +264,8 @@ public class NotificationMaskService extends NotificationListenerService {
     }
 
     private static void appendLine(StringBuilder builder, String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return;
-        }
-        if (builder.length() > 0) {
-            builder.append('\n');
-        }
+        if (value == null || value.trim().isEmpty()) return;
+        if (builder.length() > 0) builder.append('\n');
         builder.append(value.trim());
     }
 
@@ -303,10 +276,8 @@ public class NotificationMaskService extends NotificationListenerService {
 
     private static final class ExtraMaskResult {
         private static final ExtraMaskResult EMPTY = new ExtraMaskResult(false, "");
-
         private final boolean changed;
         private final String safeText;
-
         private ExtraMaskResult(boolean changed, String safeText) {
             this.changed = changed;
             this.safeText = safeText;
