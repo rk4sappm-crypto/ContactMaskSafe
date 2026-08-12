@@ -3,46 +3,38 @@ name: Build ContactMask Safe APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, contactmasksafe-v3.1-one-tap ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
       - name: Install Android 16 SDK
         run: |
           sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           yes | sdkmanager --licenses
-
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-
       - name: Build installable debug APK
         run: gradle assembleDebug
-
-      - name: Prepare universal APK artifact
+      - name: Prepare direct-install APK artifact
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/ContactMaskSafe-3.0.0-universal-debug.apk
-          sha256sum dist/ContactMaskSafe-3.0.0-universal-debug.apk > dist/SHA256SUMS.txt
-
+          cp app/build/outputs/apk/debug/app-debug.apk dist/ContactMaskSafe-3.1.0-OneTap-PasswordProtected.apk
+          sha256sum dist/ContactMaskSafe-3.1.0-OneTap-PasswordProtected.apk > dist/SHA256SUMS.txt
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ContactMaskSafe-3.0-installable-apk
+          name: ContactMaskSafe-3.1.0-direct-install
           path: dist/
