@@ -18,6 +18,9 @@ jobs:
       - name: Apply Makoo branding
         run: python3 tools/apply_makoo_brand.py
 
+      - name: Apply Makoo 3.3 Protected Contact Screen
+        run: git apply .github/makoo-v3.3-protected-contact.patch
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -43,12 +46,12 @@ jobs:
       - name: Prepare Makoo APK and exact source
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/Makoo-3.2.1-ScrollSafe-PasswordProtected.apk
-          zip -qr dist/Makoo-3.2.1-ScrollSafe-Source.zip . -x '.git/*' 'dist/*' '.gradle/*' 'app/build/*'
-          (cd dist && sha256sum Makoo-3.2.1-ScrollSafe-PasswordProtected.apk Makoo-3.2.1-ScrollSafe-Source.zip > SHA256SUMS.txt)
+          cp app/build/outputs/apk/debug/app-debug.apk dist/Makoo-3.3.0-ProtectedContact-PasswordProtected.apk
+          zip -qr dist/Makoo-3.3.0-ProtectedContact-Source.zip . -x '.git/*' 'dist/*' '.gradle/*' 'app/build/*'
+          (cd dist && sha256sum Makoo-3.3.0-ProtectedContact-PasswordProtected.apk Makoo-3.3.0-ProtectedContact-Source.zip > SHA256SUMS.txt)
 
       - name: Upload Makoo package
         uses: actions/upload-artifact@v4
         with:
-          name: Makoo-3.2.1-APK-and-Source
+          name: Makoo-3.3.0-ProtectedContact-APK-and-Source
           path: dist/
