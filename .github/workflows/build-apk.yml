@@ -11,33 +11,52 @@ jobs:
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
-      - name: Apply ScrollSafe 3.1.2 patch
+
+      - name: Restore ContactMask Safe 3.2.0 Universal source
         if: github.ref == 'refs/heads/contactmasksafe-v3.1-one-tap'
-        run: git apply .github/scrollsafe-v3.1.2.patch
+        run: |
+          rm -rf /tmp/contactmask320
+          mkdir -p /tmp/contactmask320
+          base64 -d .github/contactmask-v3.2.0-source.zip.b64 > /tmp/contactmask320/source.zip
+          unzip -q /tmp/contactmask320/source.zip -d /tmp/contactmask320/source
+          SRC=/tmp/contactmask320/source/contactmask_v260_no_activation_src
+          rm -rf app gradle
+          rm -f build.gradle settings.gradle
+          cp -a "$SRC/app" ./app
+          cp -a "$SRC/gradle" ./gradle
+          cp "$SRC/build.gradle" ./build.gradle
+          cp "$SRC/settings.gradle" ./settings.gradle
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
       - name: Install Android 16 SDK
         run: |
           sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           yes | sdkmanager --licenses
+
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+
       - name: Build installable debug APK
         run: gradle assembleDebug
+
       - name: Prepare direct-install APK artifact
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/ContactMaskSafe-3.1.2-ScrollSafe-OneTap-PasswordProtected.apk
-          sha256sum dist/ContactMaskSafe-3.1.2-ScrollSafe-OneTap-PasswordProtected.apk > dist/SHA256SUMS.txt
+          cp app/build/outputs/apk/debug/app-debug.apk dist/ContactMaskSafe-3.2.0-Universal-SmartSetup.apk
+          sha256sum dist/ContactMaskSafe-3.2.0-Universal-SmartSetup.apk > dist/SHA256SUMS.txt
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ContactMaskSafe-3.1.2-scrollsafe-direct-install
+          name: ContactMaskSafe-3.2.0-universal-direct-install
           path: dist/
