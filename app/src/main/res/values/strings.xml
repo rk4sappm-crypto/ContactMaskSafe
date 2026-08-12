@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">ContactMask Safe</string>
     <string name="accessibility_service_label">ContactMask Safe screen protection</string>
-    <string name="accessibility_service_description">Masks saved contact phone numbers with the word Masked on supported screens and can replace copied saved numbers with Masked. Processing stays on-device and no data is sent to the Internet.</string>
+    <string name="accessibility_service_description">Covers saved contact phone numbers with Masked on supported screens using Anti-Blink and ScrollSafe protection. Matching stays on-device.</string>
     <string name="notification_service_label">ContactMask Safe notification protection</string>
+    <string name="safe_share_label">Share safely with ContactMask Safe</string>
 </resources>
