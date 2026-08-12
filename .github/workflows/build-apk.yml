@@ -19,7 +19,7 @@ jobs:
         run: python3 tools/apply_makoo_brand.py
 
       - name: Apply Makoo 3.3 Protected Contact Screen
-        run: git apply .github/makoo-v3.3-protected-contact.patch
+        run: python3 tools/apply_makoo_v3_3_protected.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
