@@ -1,4 +1,4 @@
-name: Build Makoo APK
+name: Build Makoo Universal APKs
 
 on:
   workflow_dispatch:
@@ -8,6 +8,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: NonVivo
+            vivo: 'false'
+            apk_name: Makoo-3.4.0-UniversalApps-NonVivo.apk
+            source_name: Makoo-3.4.0-UniversalApps-NonVivo-Source.zip
+            artifact_name: Makoo-3.4.0-UniversalApps-NonVivo
+          - variant: VivoPersistent
+            vivo: 'true'
+            apk_name: Makoo-3.4.0-UniversalApps-VivoPersistent.apk
+            source_name: Makoo-3.4.0-UniversalApps-VivoPersistent-Source.zip
+            artifact_name: Makoo-3.4.0-UniversalApps-VivoPersistent
+
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -18,17 +33,22 @@ jobs:
       - name: Apply Makoo branding
         run: python3 tools/apply_makoo_brand.py
 
-      - name: Apply Makoo 3.3 Protected Contact Screen
+      - name: Apply Makoo Protected Contact Screen
         run: python3 tools/apply_makoo_v3_3_protected.py
 
-      - name: Apply Makoo 3.3.1 CopySafe protection
+      - name: Apply Makoo CopySafe protection
         run: python3 tools/apply_makoo_v3_3_1_copysafe.py
 
-      - name: Apply Makoo 3.3.2 VivoFix compatibility
+      - name: Apply Vivo compatibility
+        if: matrix.vivo == 'true'
         run: python3 tools/apply_makoo_v3_3_2_vivofix.py
 
-      - name: Apply Makoo 3.3.3 Persistent Vivo protection
+      - name: Apply persistent Vivo protection
+        if: matrix.vivo == 'true'
         run: python3 tools/apply_makoo_v3_3_3_persistent_vivo.py
+
+      - name: Apply Makoo 3.4 Universal App Protection
+        run: python3 tools/apply_makoo_v3_4_universal_apps.py .
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -52,15 +72,15 @@ jobs:
       - name: Build Makoo direct-install APK
         run: gradle assembleDebug
 
-      - name: Prepare Makoo APK and exact source
+      - name: Prepare APK and exact source
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/Makoo-3.3.3-PersistentVivo-CopySafe-ProtectedContact.apk
-          zip -qr dist/Makoo-3.3.3-PersistentVivo-Source.zip . -x '.git/*' 'dist/*' '.gradle/*' 'app/build/*'
-          (cd dist && sha256sum Makoo-3.3.3-PersistentVivo-CopySafe-ProtectedContact.apk Makoo-3.3.3-PersistentVivo-Source.zip > SHA256SUMS.txt)
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/${{ matrix.apk_name }}"
+          zip -qr "dist/${{ matrix.source_name }}" . -x '.git/*' 'dist/*' '.gradle/*' 'app/build/*'
+          (cd dist && sha256sum "${{ matrix.apk_name }}" "${{ matrix.source_name }}" > SHA256SUMS.txt)
 
       - name: Upload Makoo package
         uses: actions/upload-artifact@v4
         with:
-          name: Makoo-3.3.3-PersistentVivo-APK-and-Source
+          name: ${{ matrix.artifact_name }}
           path: dist/
