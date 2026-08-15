@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "org.ucpl.makookidslanguages"
     compileSdk = 35
+
     defaultConfig {
         applicationId = "org.ucpl.makookidslanguages"
         minSdk = 23
@@ -13,4 +14,13 @@ android {
         versionCode = 1
         versionName = "1.0.0"
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
