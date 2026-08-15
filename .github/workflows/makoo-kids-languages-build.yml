@@ -39,6 +39,8 @@ jobs:
 
           python - <<'PY'
           from pathlib import Path
+
+          # Fix SpeechRecognizer smart-cast issue in the verified transferred source.
           p = Path('Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/VoiceAssistantService.kt')
           s = p.read_text()
           old = '''        try {\n            recognizer?.destroy()\n            recognizer = SpeechRecognizer.createSpeechRecognizer(this)\n            recognizer?.setRecognitionListener(object : RecognitionListener {'''
@@ -50,10 +52,20 @@ jobs:
           assert old2 in s, 'voice startListening pattern not found'
           s = s.replace(old2, new2, 1)
           p.write_text(s)
+
+          # Fix Teacher Dashboard progress row parent.
+          m = Path('Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/MainActivity.kt')
+          ms = m.read_text()
+          old3 = '            addView(progressLine("${pack.icon} ${pack.subject}","$done / ${lessons.size}"))'
+          new3 = '            c.addView(progressLine("${pack.icon} ${pack.subject}","$done / ${lessons.size}"))'
+          assert old3 in ms, 'teacher progress addView pattern not found'
+          ms = ms.replace(old3, new3, 1)
+          m.write_text(ms)
           PY
 
           grep -q 'class VoiceAssistantService' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/VoiceAssistantService.kt
           grep -q 'val speechRecognizer = SpeechRecognizer.createSpeechRecognizer' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/VoiceAssistantService.kt
+          grep -q 'c.addView(progressLine' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/MainActivity.kt
           grep -q 'Makoo Kids' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/MainActivity.kt
           grep -q 'Designed and Developed in India by UCPL Technologies' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/MainActivity.kt
           python - <<'PY'
