@@ -1,0 +1,280 @@
+
+        root.addView(buildHeaderCard())
+        root.addView(spacer(10))
+        root.addView(buildSettingsCard())
+        root.addView(spacer(10))
+        root.addView(buildStatsCard())
+        root.addView(spacer(12))
+
+        root.addView(TextView(this).apply {
+            text = "Choose a learning adventure"
+            textSize = 20f
+            setTextColor(navy)
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(4), dp(2), dp(4), dp(7))
+        })
+        root.addView(buildModeGrid())
+        root.addView(spacer(12))
+
+        modeTitle = TextView(this).apply {
+            textSize = 21f
+            setTextColor(navy)
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(5), dp(5), dp(5), dp(8))
+        }
+        root.addView(modeTitle)
+
+        contentArea = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        root.addView(contentArea)
+
+        root.addView(spacer(16))
+        root.addView(card(paleBlue, 18).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            addView(TextView(this@MainActivity).apply {
+                text = "🛡️ Kid-friendly learning"
+                textSize = 16f
+                setTextColor(navy)
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Short practice sessions • no ads in this build • microphone is used only when Speak is tapped"
+                textSize = 13f
+                setTextColor(muted)
+                setPadding(0, dp(4), 0, 0)
+            })
+        })
+
+        root.addView(TextView(this).apply {
+            text = "Designed and Developed in India by UCPL Technologies"
+            textSize = 12.5f
+            gravity = Gravity.CENTER
+            setTextColor(navy)
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(4), dp(18), dp(4), dp(6))
+        })
+
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        })
+    }
+
+    private fun buildHeaderCard(): View {
+        return card(Color.WHITE, 22).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(resources.getIdentifier("makoo_logo", "drawable", packageName))
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = rounded(Color.WHITE, 18)
+            }, LinearLayout.LayoutParams(dp(76), dp(76)).apply { setMargins(0, 0, dp(12), 0) })
+
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(this@MainActivity).apply {
+                    text = "Makoo Kids Languages"
+                    textSize = 24f
+                    setTextColor(navy)
+                    setTypeface(typeface, Typeface.BOLD)
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = "Listen • Learn • Speak • Play"
+                    textSize = 14f
+                    setTextColor(orange)
+                    setTypeface(typeface, Typeface.BOLD)
+                    setPadding(0, dp(2), 0, dp(4))
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = "25 languages • age-wise paths • daily practice"
+                    textSize = 12.5f
+                    setTextColor(muted)
+                })
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+    }
+
+    private fun buildSettingsCard(): View {
+        val box = card(paleOrange, 18).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        box.addView(label("Learning setup"))
+
+        ageSpinner = spinner(arrayOf("Age 3–5 • Little Learner", "Age 6–8 • Explorer", "Age 9–12 • Confident Speaker"))
+        val ageSaved = prefs.getInt("age_index", 1).coerceIn(0, 2)
+        ageSpinner.setSelection(ageSaved)
+        ageSpinner.onItemSelectedListener = listener { position ->
+            prefs.edit().putInt("age_index", position).apply()
+            if (::contentArea.isInitialized) showMode(currentMode)
+        }
+        box.addView(ageSpinner, fullRow())
+
+        languageSpinner = spinner(packs.map { "${it.name} — ${it.nativeName}" }.toTypedArray())
+        languageSpinner.setSelection(prefs.getInt("language_index", 0).coerceIn(0, packs.lastIndex))
+        languageSpinner.onItemSelectedListener = listener { position ->
+            prefs.edit().putInt("language_index", position).apply()
+            if (::contentArea.isInitialized) showMode(currentMode)
+        }
+        box.addView(languageSpinner, fullRow())
+
+        val lowerRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        speedSpinner = spinner(arrayOf("Slow voice", "Normal voice", "Fast voice"))
+        speedSpinner.setSelection(prefs.getInt("speed_index", 0).coerceIn(0, 2))
+        speedSpinner.onItemSelectedListener = listener { position -> prefs.edit().putInt("speed_index", position).apply() }
+        goalSpinner = spinner(arrayOf("Goal 5", "Goal 10", "Goal 15"))
+        goalSpinner.setSelection(prefs.getInt("goal_index", 1).coerceIn(0, 2))
+        goalSpinner.onItemSelectedListener = listener { position ->
+            prefs.edit().putInt("goal_index", position).apply()
+            refreshHeaderStats()
+        }
+        lowerRow.addView(speedSpinner, LinearLayout.LayoutParams(0, dp(52), 1f).apply { setMargins(0, dp(5), dp(5), 0) })
+        lowerRow.addView(goalSpinner, LinearLayout.LayoutParams(0, dp(52), 1f).apply { setMargins(dp(5), dp(5), 0, 0) })
+        box.addView(lowerRow)
+        return box
+    }
+
+    private fun buildStatsCard(): View {
+        return card(Color.WHITE, 18).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(12))
+            statsText = TextView(this@MainActivity).apply {
+                textSize = 14f
+                setTextColor(dark)
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+            }
+            addView(statsText)
+            dailyText = TextView(this@MainActivity).apply {
+                textSize = 12.5f
+                setTextColor(muted)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(7), 0, dp(4))
+            }
+            addView(dailyText)
+            dailyProgress = ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply {
+                progressDrawable.setTint(orange)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(225, 230, 238))
+            }
+            addView(dailyProgress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(10)))
+        }
+    }
+
+    private fun buildModeGrid(): View {
+        val modes = listOf(
+            Triple("🌞", "Daily Practice", "5 smart activities"),
+            Triple("🧠", "Learn Words", "picture-style cards"),
+            Triple("🎤", "Speak & Score", "pronunciation practice"),
+            Triple("💬", "Conversation", "question & reply"),
+            Triple("🔤", "Alphabet / Script", "letters & characters"),
+            Triple("🎯", "Quiz", "quick recall game"),
+            Triple("🌙", "Story Practice", "listen in sequence"),
+            Triple("❤️", "Favorites", "saved practice"),
+            Triple("✨", "Smart Review", "practice weak words"),
+            Triple("👨‍👩‍👧", "Parent Progress", "stars & progress")
+        )
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        modes.chunked(2).forEach { pair ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            pair.forEachIndexed { idx, m ->
+                val button = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(dp(8), dp(12), dp(8), dp(12))
+                    background = rounded(if ((grid.childCount + idx) % 2 == 0) paleBlue else paleOrange, 18)
+                    isClickable = true
+                    isFocusable = true
+                    addView(TextView(this@MainActivity).apply { text = m.first; textSize = 25f; gravity = Gravity.CENTER })
+                    addView(TextView(this@MainActivity).apply {
+                        text = m.second
+                        textSize = 14.5f
+                        setTextColor(navy)
+                        setTypeface(typeface, Typeface.BOLD)
+                        gravity = Gravity.CENTER
+                    })
+                    addView(TextView(this@MainActivity).apply {
+                        text = m.third
+                        textSize = 11.5f
+                        setTextColor(muted)
+                        gravity = Gravity.CENTER
+                    })
+                    setOnClickListener { showMode(m.second) }
+                }
+                row.addView(button, LinearLayout.LayoutParams(0, dp(100), 1f).apply {
+                    setMargins(if (idx == 0) 0 else dp(5), dp(4), if (idx == 0) dp(5) else 0, dp(4))
+                })
+            }
+            if (pair.size == 1) row.addView(View(this), LinearLayout.LayoutParams(0, dp(100), 1f))
+            grid.addView(row)
+        }
+        return grid
+    }
+
+    private fun showMode(mode: String) {
+        currentMode = mode
+        if (!::contentArea.isInitialized) return
+        contentArea.removeAllViews()
+        modeTitle.text = mode
+        when (mode) {
+            "Daily Practice" -> showItemDeck(dailyItems(), "Complete a few activities every day to build confidence.")
+            "Learn Words" -> showItemDeck(allWordItems(currentPack()), "See the meaning, listen, repeat and save favorites.")
+            "Speak & Score" -> showItemDeck(speakingItems(), "Tap Listen first, then Speak. Makoo compares what was heard with the target phrase.")
+            "Conversation" -> showConversation()
+            "Alphabet / Script" -> showAlphabet()
+            "Quiz" -> showQuiz()
+            "Story Practice" -> showStoryPractice()
+            "Favorites" -> showFavorites()
+            "Smart Review" -> showSmartReview()
+            "Parent Progress" -> showParentProgress()
+        }
+    }
+
+    private fun showItemDeck(items: List<LearningItem>, helper: String) {
+        activeItems = if (items.isEmpty()) listOf(LearningItem("Hello", currentPack().hello, "👋")) else items
+        activeIndex = 0
+        contentArea.addView(infoText(helper))
+        contentArea.addView(spacer(7))
+        renderActiveItemCard()
+    }
+
+    private fun renderActiveItemCard() {
+        while (contentArea.childCount > 2) contentArea.removeViewAt(2)
+        val item = activeItems[activeIndex.coerceIn(0, activeItems.lastIndex)]
+        setCurrentItem(item)
+
+        val c = card(Color.WHITE, 22).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+        }
+        c.addView(TextView(this).apply { text = item.emoji; textSize = 46f; gravity = Gravity.CENTER })
+        c.addView(TextView(this).apply {
+            text = item.target
+            textSize = 31f
+            setTextColor(navy)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            textDirection = View.TEXT_DIRECTION_LOCALE
+            setPadding(dp(4), dp(6), dp(4), dp(4))
+        })
+        c.addView(TextView(this).apply {
+            text = item.english
+            textSize = 17f
+            setTextColor(orange)
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        c.addView(TextView(this).apply {
+            text = "Card ${activeIndex + 1} of ${activeItems.size}"
+            textSize = 12f
+            setTextColor(muted)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, dp(10))
+        })
+
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actions.addView(actionButton("🔊 Listen", navy) { speakText(item.target) }, weightedButton())
