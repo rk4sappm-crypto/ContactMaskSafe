@@ -1,0 +1,140 @@
+package org.ucpl.makookidslanguages
+
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.*
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import kotlin.math.max
+
+class MainActivity : Activity(), TextToSpeech.OnInitListener {
+
+    data class LanguagePack(
+        val name: String,
+        val nativeName: String,
+        val locale: Locale,
+        val hello: String,
+        val thanks: String,
+        val yes: String,
+        val no: String,
+        val child: String,
+        val mother: String,
+        val father: String,
+        val water: String,
+        val apple: String,
+        val book: String,
+        val school: String,
+        val one: String,
+        val two: String,
+        val three: String,
+        val how: String,
+        val reply: String,
+        val alphabet: String
+    )
+
+    data class LearningItem(val english: String, val target: String, val emoji: String)
+
+    private val navy = Color.rgb(8, 42, 94)
+    private val orange = Color.rgb(255, 122, 0)
+    private val cream = Color.rgb(255, 248, 240)
+    private val paleBlue = Color.rgb(235, 246, 255)
+    private val paleOrange = Color.rgb(255, 240, 220)
+    private val green = Color.rgb(38, 145, 91)
+    private val dark = Color.rgb(35, 40, 50)
+    private val muted = Color.rgb(95, 105, 120)
+
+    private lateinit var prefs: android.content.SharedPreferences
+    private lateinit var tts: TextToSpeech
+    private var ttsReady = false
+    private var speech: SpeechRecognizer? = null
+
+    private lateinit var languageSpinner: Spinner
+    private lateinit var ageSpinner: Spinner
+    private lateinit var speedSpinner: Spinner
+    private lateinit var goalSpinner: Spinner
+    private lateinit var statsText: TextView
+    private lateinit var dailyProgress: ProgressBar
+    private lateinit var dailyText: TextView
+    private lateinit var modeTitle: TextView
+    private lateinit var contentArea: LinearLayout
+
+    private var currentMode = "Daily Practice"
+    private var activeItems: List<LearningItem> = emptyList()
+    private var activeIndex = 0
+    private var currentTarget = "Hello"
+    private var currentEnglish = "Hello"
+    private var currentEmoji = "👋"
+
+    private val packs = listOf(
+        pack("English", "English", Locale.US, "Hello", "Thank you", "Yes", "No", "Child", "Mother", "Father", "Water", "Apple", "Book", "School", "One", "Two", "Three", "How are you?", "I am fine.", "A B C D E F G • a b c d e f g"),
+        pack("Hindi", "हिन्दी", Locale("hi", "IN"), "नमस्ते", "धन्यवाद", "हाँ", "नहीं", "बच्चा", "माँ", "पिता", "पानी", "सेब", "किताब", "विद्यालय", "एक", "दो", "तीन", "आप कैसे हैं?", "मैं ठीक हूँ।", "अ आ इ ई उ ऊ ए ऐ ओ औ • क ख ग घ ङ"),
+        pack("Sanskrit", "संस्कृतम्", Locale("sa", "IN"), "नमस्ते", "धन्यवादः", "आम्", "न", "बालकः", "माता", "पिता", "जलम्", "सेवफलम्", "पुस्तकम्", "विद्यालयः", "एकम्", "द्वे", "त्रीणि", "भवान् कथम् अस्ति?", "अहं कुशली अस्मि।", "अ आ इ ई उ ऊ ऋ ॠ ए ऐ ओ औ • क ख ग घ ङ"),
+        pack("Spanish", "Español", Locale("es", "ES"), "Hola", "Gracias", "Sí", "No", "Niño", "Madre", "Padre", "Agua", "Manzana", "Libro", "Escuela", "Uno", "Dos", "Tres", "¿Cómo estás?", "Estoy bien.", "A B C D E F G • Ñ"),
+        pack("French", "Français", Locale.FRANCE, "Bonjour", "Merci", "Oui", "Non", "Enfant", "Mère", "Père", "Eau", "Pomme", "Livre", "École", "Un", "Deux", "Trois", "Comment ça va ?", "Ça va bien.", "A B C D E F G • É È À Ç"),
+        pack("German", "Deutsch", Locale.GERMANY, "Hallo", "Danke", "Ja", "Nein", "Kind", "Mutter", "Vater", "Wasser", "Apfel", "Buch", "Schule", "Eins", "Zwei", "Drei", "Wie geht es dir?", "Mir geht es gut.", "A B C D E F G • Ä Ö Ü ß"),
+        pack("Japanese", "日本語", Locale.JAPAN, "こんにちは", "ありがとう", "はい", "いいえ", "こども", "おかあさん", "おとうさん", "みず", "りんご", "ほん", "がっこう", "いち", "に", "さん", "お元気ですか？", "元気です。", "あ い う え お • か き く け こ • ア イ ウ エ オ"),
+        pack("Chinese", "中文", Locale.SIMPLIFIED_CHINESE, "你好", "谢谢", "是", "不是", "孩子", "妈妈", "爸爸", "水", "苹果", "书", "学校", "一", "二", "三", "你好吗？", "我很好。", "一 二 三 人 大 小 • 水 火 山 木"),
+        pack("Korean", "한국어", Locale.KOREA, "안녕하세요", "감사합니다", "네", "아니요", "아이", "어머니", "아버지", "물", "사과", "책", "학교", "하나", "둘", "셋", "어떻게 지내요?", "잘 지내요.", "ㄱ ㄴ ㄷ ㄹ ㅁ ㅂ ㅅ • ㅏ ㅑ ㅓ ㅕ ㅗ"),
+        pack("Italian", "Italiano", Locale.ITALY, "Ciao", "Grazie", "Sì", "No", "Bambino", "Madre", "Padre", "Acqua", "Mela", "Libro", "Scuola", "Uno", "Due", "Tre", "Come stai?", "Sto bene.", "A B C D E F G"),
+        pack("Portuguese", "Português", Locale("pt", "BR"), "Olá", "Obrigado", "Sim", "Não", "Criança", "Mãe", "Pai", "Água", "Maçã", "Livro", "Escola", "Um", "Dois", "Três", "Como você está?", "Estou bem.", "A B C D E F G • Ã Õ Ç"),
+        pack("Russian", "Русский", Locale("ru", "RU"), "Привет", "Спасибо", "Да", "Нет", "Ребёнок", "Мама", "Папа", "Вода", "Яблоко", "Книга", "Школа", "Один", "Два", "Три", "Как дела?", "Хорошо.", "А Б В Г Д Е Ё Ж З И Й К"),
+        pack("Arabic", "العربية", Locale("ar", "SA"), "مرحبا", "شكرا", "نعم", "لا", "طفل", "أم", "أب", "ماء", "تفاحة", "كتاب", "مدرسة", "واحد", "اثنان", "ثلاثة", "كيف حالك؟", "أنا بخير.", "ا ب ت ث ج ح خ د ذ ر ز س"),
+        pack("Bengali", "বাংলা", Locale("bn", "IN"), "নমস্কার", "ধন্যবাদ", "হ্যাঁ", "না", "শিশু", "মা", "বাবা", "জল", "আপেল", "বই", "স্কুল", "এক", "দুই", "তিন", "তুমি কেমন আছ?", "আমি ভালো আছি।", "অ আ ই ঈ উ ঊ এ ঐ ও ঔ • ক খ গ ঘ ঙ"),
+        pack("Punjabi", "ਪੰਜਾਬੀ", Locale("pa", "IN"), "ਸਤ ਸ੍ਰੀ ਅਕਾਲ", "ਧੰਨਵਾਦ", "ਹਾਂ", "ਨਹੀਂ", "ਬੱਚਾ", "ਮਾਂ", "ਪਿਤਾ", "ਪਾਣੀ", "ਸੇਬ", "ਕਿਤਾਬ", "ਸਕੂਲ", "ਇੱਕ", "ਦੋ", "ਤਿੰਨ", "ਤੁਸੀਂ ਕਿਵੇਂ ਹੋ?", "ਮੈਂ ਠੀਕ ਹਾਂ।", "ੳ ਅ ੲ ਸ ਹ ਕ ਖ ਗ ਘ ਙ"),
+        pack("Gujarati", "ગુજરાતી", Locale("gu", "IN"), "નમસ્તે", "આભાર", "હા", "ના", "બાળક", "માતા", "પિતા", "પાણી", "સફરજન", "પુસ્તક", "શાળા", "એક", "બે", "ત્રણ", "તમે કેમ છો?", "હું મજામાં છું.", "અ આ ઇ ઈ ઉ ઊ એ ઐ ઓ ઔ • ક ખ ગ ઘ ઙ"),
+        pack("Marathi", "मराठी", Locale("mr", "IN"), "नमस्कार", "धन्यवाद", "हो", "नाही", "मूल", "आई", "वडील", "पाणी", "सफरचंद", "पुस्तक", "शाळा", "एक", "दोन", "तीन", "तुम्ही कसे आहात?", "मी ठीक आहे.", "अ आ इ ई उ ऊ ए ऐ ओ औ • क ख ग घ ङ"),
+        pack("Tamil", "தமிழ்", Locale("ta", "IN"), "வணக்கம்", "நன்றி", "ஆம்", "இல்லை", "குழந்தை", "அம்மா", "அப்பா", "தண்ணீர்", "ஆப்பிள்", "புத்தகம்", "பள்ளி", "ஒன்று", "இரண்டு", "மூன்று", "நீங்கள் எப்படி இருக்கிறீர்கள்?", "நான் நன்றாக இருக்கிறேன்.", "அ ஆ இ ஈ உ ஊ எ ஏ ஐ ஒ ஓ ஔ • க ங ச ஞ ட"),
+        pack("Telugu", "తెలుగు", Locale("te", "IN"), "నమస్తే", "ధన్యవాదాలు", "అవును", "కాదు", "పిల్ల", "అమ్మ", "నాన్న", "నీరు", "ఆపిల్", "పుస్తకం", "పాఠశాల", "ఒకటి", "రెండు", "మూడు", "మీరు ఎలా ఉన్నారు?", "నేను బాగున్నాను.", "అ ఆ ఇ ఈ ఉ ఊ ఎ ఏ ఐ ఒ ఓ ఔ • క ఖ గ ఘ ఙ"),
+        pack("Malayalam", "മലയാളം", Locale("ml", "IN"), "നമസ്കാരം", "നന്ദി", "അതെ", "അല്ല", "കുട്ടി", "അമ്മ", "അച്ഛൻ", "വെള്ളം", "ആപ്പിൾ", "പുസ്തകം", "സ്കൂൾ", "ഒന്ന്", "രണ്ട്", "മൂന്ന്", "സുഖമാണോ?", "എനിക്ക് സുഖമാണ്.", "അ ആ ഇ ഈ ഉ ഊ എ ഏ ഐ ഒ ഓ ഔ • ക ഖ ഗ ഘ ങ"),
+        pack("Kannada", "ಕನ್ನಡ", Locale("kn", "IN"), "ನಮಸ್ಕಾರ", "ಧನ್ಯವಾದಗಳು", "ಹೌದು", "ಇಲ್ಲ", "ಮಗು", "ಅಮ್ಮ", "ಅಪ್ಪ", "ನೀರು", "ಸೇಬು", "ಪುಸ್ತಕ", "ಶಾಲೆ", "ಒಂದು", "ಎರಡು", "ಮೂರು", "ನೀವು ಹೇಗಿದ್ದೀರಿ?", "ನಾನು ಚೆನ್ನಾಗಿದ್ದೇನೆ.", "ಅ ಆ ಇ ಈ ಉ ಊ ಎ ಏ ಐ ಒ ಓ ಔ • ಕ ಖ ಗ ಘ ಙ"),
+        pack("Urdu", "اردو", Locale("ur", "IN"), "السلام علیکم", "شکریہ", "ہاں", "نہیں", "بچہ", "ماں", "والد", "پانی", "سیب", "کتاب", "اسکول", "ایک", "دو", "تین", "آپ کیسے ہیں؟", "میں ٹھیک ہوں۔", "ا ب پ ت ٹ ث ج چ ح خ د"),
+        pack("Thai", "ไทย", Locale("th", "TH"), "สวัสดี", "ขอบคุณ", "ใช่", "ไม่", "เด็ก", "แม่", "พ่อ", "น้ำ", "แอปเปิล", "หนังสือ", "โรงเรียน", "หนึ่ง", "สอง", "สาม", "สบายดีไหม?", "สบายดี", "ก ข ฃ ค ฅ ฆ ง จ ฉ ช ซ"),
+        pack("Indonesian", "Bahasa Indonesia", Locale("id", "ID"), "Halo", "Terima kasih", "Ya", "Tidak", "Anak", "Ibu", "Ayah", "Air", "Apel", "Buku", "Sekolah", "Satu", "Dua", "Tiga", "Apa kabar?", "Saya baik.", "A B C D E F G"),
+        pack("Turkish", "Türkçe", Locale("tr", "TR"), "Merhaba", "Teşekkürler", "Evet", "Hayır", "Çocuk", "Anne", "Baba", "Su", "Elma", "Kitap", "Okul", "Bir", "İki", "Üç", "Nasılsın?", "İyiyim.", "A B C Ç D E F G Ğ H I İ")
+    )
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        prefs = getSharedPreferences("makoo_kids_languages", MODE_PRIVATE)
+        updateStreakAndSession()
+        tts = TextToSpeech(this, this)
+        buildUi()
+        refreshHeaderStats()
+        showMode("Daily Practice")
+        if (!prefs.getBoolean("welcome_seen", false)) {
+            Toast.makeText(this, "Welcome to Makoo! Pick an age and language, then start with Daily Practice.", Toast.LENGTH_LONG).show()
+            prefs.edit().putBoolean("welcome_seen", true).apply()
+        }
+    }
+
+    private fun pack(
+        name: String, nativeName: String, locale: Locale, hello: String, thanks: String,
+        yes: String, no: String, child: String, mother: String, father: String, water: String,
+        apple: String, book: String, school: String, one: String, two: String, three: String,
+        how: String, reply: String, alphabet: String
+    ) = LanguagePack(name, nativeName, locale, hello, thanks, yes, no, child, mother, father, water, apple, book, school, one, two, three, how, reply, alphabet)
+
+    private fun buildUi() {
+        window.statusBarColor = navy
+        window.navigationBarColor = cream
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(24))
+            setBackgroundColor(cream)
+        }
