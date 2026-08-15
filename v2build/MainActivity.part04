@@ -1,0 +1,50 @@
+        setPadding(dp(20), dp(24), dp(20), dp(24))
+        addView(TextView(this@MainActivity).apply { text = icon; textSize = 42f; gravity = Gravity.CENTER })
+        addView(TextView(this@MainActivity).apply {
+            text = title; textSize = 20f; setTextColor(navy); setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = body; textSize = 13.5f; setTextColor(muted); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
+        })
+    }
+
+    private fun actionButton(textValue: String, color: Int, onClick: () -> Unit): Button = Button(this).apply {
+        text = textValue
+        textSize = 14f
+        setTextColor(Color.WHITE)
+        isAllCaps = false
+        background = rounded(color, 14)
+        setPadding(dp(7), 0, dp(7), 0)
+        setOnClickListener { onClick() }
+    }
+
+    private fun card(color: Int, radius: Int): LinearLayout = LinearLayout(this).apply {
+        background = rounded(color, radius, Color.rgb(230, 232, 236))
+        elevation = dp(2).toFloat()
+    }
+
+    private fun rounded(color: Int, radius: Int, stroke: Int? = null): GradientDrawable = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radius).toFloat()
+        if (stroke != null) setStroke(dp(1), stroke)
+    }
+
+    private fun fullRow() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply { setMargins(0, dp(4), 0, dp(3)) }
+    private fun fullButton() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply { setMargins(0, dp(7), 0, 0) }
+    private fun weightedButton(left: Int = 0, right: Int = 0) = LinearLayout.LayoutParams(0, dp(52), 1f).apply { setMargins(left, dp(5), right, 0) }
+    private fun spacer(height: Int) = Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(height)) }
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 44 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startListening()
+        else if (requestCode == 44) Toast.makeText(this, "Microphone permission is needed only for speaking practice.", Toast.LENGTH_LONG).show()
+    }
+
+    override fun onDestroy() {
+        speech?.destroy()
+        tts.stop()
+        tts.shutdown()
+        super.onDestroy()
+    }
+}
