@@ -1,0 +1,72 @@
+name: Build Makoo Spoken Languages APK
+
+on:
+  push:
+    branches: [ makoo-spoken-languages-build ]
+    paths:
+      - 'spokenbuild/**'
+      - '.github/workflows/makoo-spoken-languages-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify source
+        run: |
+          set -euo pipefail
+          cat spokenbuild/source.s00 spokenbuild/source.s01 spokenbuild/source.s02 spokenbuild/source.s03 spokenbuild/source.s04 spokenbuild/source.s05 spokenbuild/source.s06 > /tmp/makoo-spoken-source.b64
+          test "$(wc -c < /tmp/makoo-spoken-source.b64)" = "22336"
+          echo "625a2c8e7f7ce660d817655823fb502dd9e197bde0e76916f65cd267284620a1  /tmp/makoo-spoken-source.b64" | sha256sum -c -
+          base64 -d /tmp/makoo-spoken-source.b64 > /tmp/makoo-spoken-source.tar.xz
+          echo "9a771c70ab81f8063b23fa6cbe4509ed14b5c6aabc83b16b7fbfe5a38ab58d04  /tmp/makoo-spoken-source.tar.xz" | sha256sum -c -
+          xz -t /tmp/makoo-spoken-source.tar.xz
+          tar -xJf /tmp/makoo-spoken-source.tar.xz
+          mkdir -p Makoo_Spoken_Languages_v1.0.0_Source/app/src/main/res/drawable-nodpi
+          base64 -d v2build/makoo_logo.b64 > Makoo_Spoken_Languages_v1.0.0_Source/app/src/main/res/drawable-nodpi/makoo_logo.png
+          grep -q 'Makoo Spoken Languages' Makoo_Spoken_Languages_v1.0.0_Source/app/src/main/java/org/ucpl/makoospokenlanguages/MainActivity.kt
+          grep -q 'Designed and Developed in India by UCPL Technologies' Makoo_Spoken_Languages_v1.0.0_Source/app/src/main/java/org/ucpl/makoospokenlanguages/MainActivity.kt
+          grep -q 'Absolute Beginner' Makoo_Spoken_Languages_v1.0.0_Source/app/src/main/java/org/ucpl/makoospokenlanguages/MainActivity.kt
+          grep -q 'Expert' Makoo_Spoken_Languages_v1.0.0_Source/app/src/main/java/org/ucpl/makoospokenlanguages/MainActivity.kt
+          file Makoo_Spoken_Languages_v1.0.0_Source/app/src/main/res/drawable-nodpi/makoo_logo.png
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: Makoo_Spoken_Languages_v1.0.0_Source
+        run: gradle assembleDebug
+
+      - name: Verify and prepare APK
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp Makoo_Spoken_Languages_v1.0.0_Source/app/build/outputs/apk/debug/app-debug.apk dist/Makoo_Spoken_Languages_v1.0.0.apk
+          unzip -t dist/Makoo_Spoken_Languages_v1.0.0.apk >/dev/null
+          sha256sum dist/Makoo_Spoken_Languages_v1.0.0.apk > dist/Makoo_Spoken_Languages_v1.0.0_SHA256.txt
+          ls -lh dist/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Makoo-Spoken-Languages-v1-APK
+          path: dist/
