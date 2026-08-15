@@ -1,0 +1,53 @@
+name: Publish Android Tools for Makoo v3
+
+on:
+  push:
+    branches:
+      - chatgpt-makoo-bedtime-v3-build
+    paths:
+      - '.github/workflows/publish-android-tools-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tools:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout temp branch
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt-makoo-bedtime-v3-build
+          fetch-depth: 0
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install and package minimal Android 35 toolchain
+        shell: bash
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          mkdir -p toolcache
+          tar -cJf toolcache/android35-minimal-tools.tar.xz \
+            -C "$ANDROID_SDK_ROOT" \
+            build-tools/35.0.0/aapt2 \
+            build-tools/35.0.0/d8 \
+            build-tools/35.0.0/d8.bat \
+            build-tools/35.0.0/lib \
+            build-tools/35.0.0/zipalign \
+            build-tools/35.0.0/apksigner \
+            build-tools/35.0.0/apksigner.bat \
+            platforms/android-35/android.jar
+          sha256sum toolcache/android35-minimal-tools.tar.xz | tee toolcache/android35-minimal-tools.sha256
+          ls -lh toolcache/android35-minimal-tools.tar.xz
+          test $(stat -c%s toolcache/android35-minimal-tools.tar.xz) -lt 99000000
+
+      - name: Commit toolchain to temporary branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add toolcache/android35-minimal-tools.tar.xz toolcache/android35-minimal-tools.sha256
+          git commit -m "Temporary Android 35 toolchain for Makoo v3 exact build"
+          git push origin HEAD:chatgpt-makoo-bedtime-v3-build
