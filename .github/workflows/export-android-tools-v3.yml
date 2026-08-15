@@ -1,0 +1,45 @@
+name: Export Android Tools for Makoo v3
+
+on:
+  push:
+    branches:
+      - chatgpt-makoo-bedtime-v3-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-tools:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35 build tools
+        shell: bash
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          echo "SDK root: $ANDROID_SDK_ROOT"
+          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2"
+          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.0/d8"
+          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner"
+          test -f "$ANDROID_SDK_ROOT/platforms/android-35/android.jar"
+
+      - name: Package minimal toolchain
+        shell: bash
+        run: |
+          tar -cJf android35-minimal-tools.tar.xz \
+            -C "$ANDROID_SDK_ROOT" \
+            build-tools/35.0.0 \
+            platforms/android-35
+          sha256sum android35-minimal-tools.tar.xz
+          ls -lh android35-minimal-tools.tar.xz
+
+      - name: Upload Android toolchain
+        uses: actions/upload-artifact@v4
+        with:
+          name: android35-minimal-build-tools
+          path: android35-minimal-tools.tar.xz
+          compression-level: 0
+          retention-days: 1
