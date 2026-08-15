@@ -36,7 +36,24 @@ jobs:
           tar -xJf /tmp/makoo-source.tar.xz
           mkdir -p Makoo_Kids_v3.0.0_Source/app/src/main/res/drawable-nodpi
           base64 -d v2build/makoo_logo.b64 > Makoo_Kids_v3.0.0_Source/app/src/main/res/drawable-nodpi/makoo_logo.png
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/VoiceAssistantService.kt')
+          s = p.read_text()
+          old = '''        try {\n            recognizer?.destroy()\n            recognizer = SpeechRecognizer.createSpeechRecognizer(this)\n            recognizer?.setRecognitionListener(object : RecognitionListener {'''
+          new = '''        try {\n            recognizer?.destroy()\n            val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)\n            recognizer = speechRecognizer\n            speechRecognizer.setRecognitionListener(object : RecognitionListener {'''
+          assert old in s, 'voice recognizer creation pattern not found'
+          s = s.replace(old, new, 1)
+          old2 = '''            recognizer?.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {'''
+          new2 = '''            speechRecognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {'''
+          assert old2 in s, 'voice startListening pattern not found'
+          s = s.replace(old2, new2, 1)
+          p.write_text(s)
+          PY
+
           grep -q 'class VoiceAssistantService' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/VoiceAssistantService.kt
+          grep -q 'val speechRecognizer = SpeechRecognizer.createSpeechRecognizer' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/VoiceAssistantService.kt
           grep -q 'Makoo Kids' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/MainActivity.kt
           grep -q 'Designed and Developed in India by UCPL Technologies' Makoo_Kids_v3.0.0_Source/app/src/main/java/org/ucpl/makookidslanguages/MainActivity.kt
           python - <<'PY'
