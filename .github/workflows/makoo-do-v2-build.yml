@@ -1,0 +1,73 @@
+name: Build Makoo Do v2 APK
+
+on:
+  push:
+    branches: [ makoo-do-v2-build ]
+    paths:
+      - 'makoov2build2/**'
+      - '.github/workflows/makoo-do-v2-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify Makoo Do v2 source
+        run: |
+          set -euo pipefail
+          cat makoov2build2/source.* > /tmp/makoo-do-v2.b64
+          test "$(wc -c < /tmp/makoo-do-v2.b64)" = "140252"
+          echo "9ca92c78a54d20eb07c9f1c731aae26cc031ba3264d0ebc5afe224d32725f44b  /tmp/makoo-do-v2.b64" | sha256sum -c -
+          base64 -d /tmp/makoo-do-v2.b64 > /tmp/makoo-do-v2.tar.xz
+          echo "e637be0923e19864adee47ac785bb2116af3fd13110d9d28c40210856f809a90  /tmp/makoo-do-v2.tar.xz" | sha256sum -c -
+          xz -t /tmp/makoo-do-v2.tar.xz
+          tar -xJf /tmp/makoo-do-v2.tar.xz
+          grep -q 'versionName = "2.0.0"' Makoo_Do_v2.0.0_Source/app/build.gradle.kts
+          grep -q 'class VoiceAssistantService' Makoo_Do_v2.0.0_Source/app/src/main/java/org/ucpl/makoodo/VoiceAssistantService.kt
+          grep -q 'Diagnostics' Makoo_Do_v2.0.0_Source/app/src/main/java/org/ucpl/makoodo/MainActivity.kt
+          grep -q 'Designed and Developed in India by UCPL Technologies' Makoo_Do_v2.0.0_Source/app/src/main/java/org/ucpl/makoodo/MainActivity.kt
+          grep -q 'BOOT_COMPLETED' Makoo_Do_v2.0.0_Source/app/src/main/java/org/ucpl/makoodo/BootReceiver.kt
+          ! grep -q 'LOCKED_BOOT_COMPLETED' Makoo_Do_v2.0.0_Source/app/src/main/AndroidManifest.xml
+          grep -q 'open_tab", "Planner"' Makoo_Do_v2.0.0_Source/app/src/main/java/org/ucpl/makoodo/ReminderReceiver.kt
+          file Makoo_Do_v2.0.0_Source/app/src/main/res/drawable-nodpi/makoo_logo.png
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: Makoo_Do_v2.0.0_Source
+        run: gradle assembleDebug
+
+      - name: Verify and prepare APK
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp Makoo_Do_v2.0.0_Source/app/build/outputs/apk/debug/app-debug.apk dist/Makoo_Do_v2.0.0.apk
+          unzip -t dist/Makoo_Do_v2.0.0.apk >/dev/null
+          sha256sum dist/Makoo_Do_v2.0.0.apk > dist/Makoo_Do_v2.0.0_SHA256.txt
+          ls -lh dist/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Makoo-Do-v2-APK
+          path: dist/
