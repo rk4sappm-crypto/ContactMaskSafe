@@ -1,0 +1,296 @@
+--- MainActivity.kt
++++ MainActivity.kt
+@@ -49,6 +49,13 @@
+ 
+     data class LearningItem(val english: String, val target: String, val emoji: String)
+ 
++    data class AdventureViews(
++        val card: LinearLayout,
++        val icon: TextView,
++        val title: TextView,
++        val subtitle: TextView
++    )
++
+     private val navy = Color.rgb(8, 42, 94)
+     private val orange = Color.rgb(255, 122, 0)
+     private val cream = Color.rgb(255, 248, 240)
+@@ -72,6 +79,9 @@
+     private lateinit var dailyText: TextView
+     private lateinit var modeTitle: TextView
+     private lateinit var contentArea: LinearLayout
++    private lateinit var mainScroll: ScrollView
++    private lateinit var adventureHeading: TextView
++    private val adventureCards = linkedMapOf<String, AdventureViews>()
+ 
+     private var currentMode = "Daily Practice"
+     private var activeItems: List<LearningItem> = emptyList()
+@@ -79,6 +89,7 @@
+     private var currentTarget = "Hello"
+     private var currentEnglish = "Hello"
+     private var currentEmoji = "👋"
++    private var flashRevealed = false
+ 
+     private val packs = listOf(
+         pack("English", "English", Locale.US, "Hello", "Thank you", "Yes", "No", "Child", "Mother", "Father", "Water", "Apple", "Book", "School", "One", "Two", "Three", "How are you?", "I am fine.", "A B C D E F G • a b c d e f g"),
+@@ -115,7 +126,7 @@
+         tts = TextToSpeech(this, this)
+         buildUi()
+         refreshHeaderStats()
+-        showMode("Daily Practice")
++        showMode(prefs.getString("last_mode", "Daily Practice") ?: "Daily Practice")
+         if (!prefs.getBoolean("welcome_seen", false)) {
+             Toast.makeText(this, "Welcome to Makoo! Pick an age and language, then start with Daily Practice.", Toast.LENGTH_LONG).show()
+             prefs.edit().putBoolean("welcome_seen", true).apply()
+@@ -146,13 +157,14 @@
+         root.addView(buildStatsCard())
+         root.addView(spacer(12))
+ 
+-        root.addView(TextView(this).apply {
++        adventureHeading = TextView(this).apply {
+             text = "Choose a learning adventure"
+             textSize = 20f
+             setTextColor(navy)
+             setTypeface(typeface, Typeface.BOLD)
+             setPadding(dp(4), dp(2), dp(4), dp(7))
+-        })
++        }
++        root.addView(adventureHeading)
+         root.addView(buildModeGrid())
+         root.addView(spacer(12))
+ 
+@@ -160,7 +172,9 @@
+             textSize = 21f
+             setTextColor(navy)
+             setTypeface(typeface, Typeface.BOLD)
+-            setPadding(dp(5), dp(5), dp(5), dp(8))
++            setPadding(dp(5), dp(7), dp(5), dp(9))
++            isClickable = true
++            setOnClickListener { scrollToAdventures() }
+         }
+         root.addView(modeTitle)
+ 
+@@ -196,10 +210,12 @@
+             setPadding(dp(4), dp(18), dp(4), dp(6))
+         })
+ 
+-        setContentView(ScrollView(this).apply {
++        mainScroll = ScrollView(this).apply {
+             isFillViewport = true
++            isSmoothScrollingEnabled = true
+             addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+-        })
++        }
++        setContentView(mainScroll)
+     }
+ 
+     private fun buildHeaderCard(): View {
+@@ -230,7 +246,7 @@
+                     setPadding(0, dp(2), 0, dp(4))
+                 })
+                 addView(TextView(this@MainActivity).apply {
+-                    text = "25 languages • age-wise paths • daily practice"
++                    text = "25 languages • 15 adventures • age-wise learning"
+                     textSize = 12.5f
+                     setTextColor(muted)
+                 })
+@@ -306,60 +322,82 @@
+ 
+     private fun buildModeGrid(): View {
+         val modes = listOf(
+-            Triple("🌞", "Daily Practice", "5 smart activities"),
++            Triple("🌞", "Daily Practice", "smart daily activities"),
+             Triple("🧠", "Learn Words", "picture-style cards"),
+             Triple("🎤", "Speak & Score", "pronunciation practice"),
+             Triple("💬", "Conversation", "question & reply"),
+             Triple("🔤", "Alphabet / Script", "letters & characters"),
+             Triple("🎯", "Quiz", "quick recall game"),
+             Triple("🌙", "Story Practice", "listen in sequence"),
++            Triple("🃏", "Flashcards", "reveal & remember"),
++            Triple("🔢", "Numbers & Counting", "1 • 2 • 3 practice"),
++            Triple("🎧", "Listening Challenge", "hear it • choose it"),
+             Triple("❤️", "Favorites", "saved practice"),
+             Triple("✨", "Smart Review", "practice weak words"),
+-            Triple("👨‍👩‍👧", "Parent Progress", "stars & progress")
++            Triple("🏅", "Achievements", "badges & next goal"),
++            Triple("👨‍👩‍👧", "Parent Progress", "stars & progress"),
++            Triple("🎲", "Surprise Me", "random learning adventure")
+         )
++        adventureCards.clear()
+         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
++        var cardIndex = 0
+         modes.chunked(2).forEach { pair ->
+             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+             pair.forEachIndexed { idx, m ->
++                val iconView = TextView(this).apply {
++                    text = m.first
++                    textSize = 25f
++                    gravity = Gravity.CENTER
++                }
++                val titleView = TextView(this).apply {
++                    text = m.second
++                    textSize = 14.5f
++                    setTextColor(navy)
++                    setTypeface(typeface, Typeface.NORMAL)
++                    gravity = Gravity.CENTER
++                }
++                val subtitleView = TextView(this).apply {
++                    text = m.third
++                    textSize = 11.5f
++                    setTextColor(muted)
++                    gravity = Gravity.CENTER
++                }
+                 val button = LinearLayout(this).apply {
+                     orientation = LinearLayout.VERTICAL
+                     gravity = Gravity.CENTER
+                     setPadding(dp(8), dp(12), dp(8), dp(12))
+-                    background = rounded(if ((grid.childCount + idx) % 2 == 0) paleBlue else paleOrange, 18)
++                    background = rounded(if (cardIndex % 2 == 0) paleBlue else paleOrange, 18, Color.rgb(225, 229, 236))
+                     isClickable = true
+                     isFocusable = true
+-                    addView(TextView(this@MainActivity).apply { text = m.first; textSize = 25f; gravity = Gravity.CENTER })
+-                    addView(TextView(this@MainActivity).apply {
+-                        text = m.second
+-                        textSize = 14.5f
+-                        setTextColor(navy)
+-                        setTypeface(typeface, Typeface.BOLD)
+-                        gravity = Gravity.CENTER
+-                    })
+-                    addView(TextView(this@MainActivity).apply {
+-                        text = m.third
+-                        textSize = 11.5f
+-                        setTextColor(muted)
+-                        gravity = Gravity.CENTER
+-                    })
+-                    setOnClickListener { showMode(m.second) }
++                    contentDescription = "${m.second}. ${m.third}"
++                    addView(iconView)
++                    addView(titleView)
++                    addView(subtitleView)
++                    setOnClickListener {
++                        if (m.second == "Surprise Me") launchSurpriseAdventure()
++                        else showMode(m.second, navigate = true)
++                    }
+                 }
+-                row.addView(button, LinearLayout.LayoutParams(0, dp(100), 1f).apply {
++                adventureCards[m.second] = AdventureViews(button, iconView, titleView, subtitleView)
++                row.addView(button, LinearLayout.LayoutParams(0, dp(104), 1f).apply {
+                     setMargins(if (idx == 0) 0 else dp(5), dp(4), if (idx == 0) dp(5) else 0, dp(4))
+                 })
++                cardIndex++
+             }
+-            if (pair.size == 1) row.addView(View(this), LinearLayout.LayoutParams(0, dp(100), 1f))
++            if (pair.size == 1) row.addView(View(this), LinearLayout.LayoutParams(0, dp(104), 1f))
+             grid.addView(row)
+         }
+         return grid
+     }
+ 
+-    private fun showMode(mode: String) {
+-        currentMode = mode
++    private fun showMode(mode: String, navigate: Boolean = false) {
++        currentMode = if (adventureCards.containsKey(mode) && mode != "Surprise Me") mode else "Daily Practice"
++        prefs.edit().putString("last_mode", currentMode).apply()
+         if (!::contentArea.isInitialized) return
++        updateAdventureSelection()
+         contentArea.removeAllViews()
+-        modeTitle.text = mode
+-        when (mode) {
++        modeTitle.text = "← Adventures   •   $currentMode"
++        when (currentMode) {
+             "Daily Practice" -> showItemDeck(dailyItems(), "Complete a few activities every day to build confidence.")
+             "Learn Words" -> showItemDeck(allWordItems(currentPack()), "See the meaning, listen, repeat and save favorites.")
+             "Speak & Score" -> showItemDeck(speakingItems(), "Tap Listen first, then Speak. Makoo compares what was heard with the target phrase.")
+@@ -367,15 +405,58 @@
+             "Alphabet / Script" -> showAlphabet()
+             "Quiz" -> showQuiz()
+             "Story Practice" -> showStoryPractice()
++            "Flashcards" -> showFlashcards()
++            "Numbers & Counting" -> showNumbersAndCounting()
++            "Listening Challenge" -> showListeningChallenge()
+             "Favorites" -> showFavorites()
+             "Smart Review" -> showSmartReview()
++            "Achievements" -> showAchievements()
+             "Parent Progress" -> showParentProgress()
+         }
++        if (navigate) scrollToSelectedContent()
++    }
++
++    private fun updateAdventureSelection() {
++        adventureCards.forEach { (name, views) ->
++            val selected = name == currentMode
++            val baseColor = if ((adventureCards.keys.indexOf(name)) % 2 == 0) paleBlue else paleOrange
++            views.card.background = if (selected) rounded(navy, 18, orange) else rounded(baseColor, 18, Color.rgb(225, 229, 236))
++            views.card.elevation = dp(if (selected) 7 else 2).toFloat()
++            views.title.setTypeface(views.title.typeface, if (selected) Typeface.BOLD else Typeface.NORMAL)
++            views.title.textSize = if (selected) 15.5f else 14.5f
++            views.title.setTextColor(if (selected) Color.WHITE else navy)
++            views.subtitle.setTextColor(if (selected) Color.rgb(225, 238, 255) else muted)
++            views.icon.textSize = if (selected) 28f else 25f
++            views.card.alpha = if (selected) 1f else 0.96f
++        }
++    }
++
++    private fun scrollToSelectedContent() {
++        if (!::mainScroll.isInitialized || !::modeTitle.isInitialized) return
++        mainScroll.postDelayed({
++            mainScroll.smoothScrollTo(0, (modeTitle.top - dp(8)).coerceAtLeast(0))
++            modeTitle.requestFocus()
++        }, 80)
++    }
++
++    private fun scrollToAdventures() {
++        if (!::mainScroll.isInitialized || !::adventureHeading.isInitialized) return
++        mainScroll.post { mainScroll.smoothScrollTo(0, (adventureHeading.top - dp(8)).coerceAtLeast(0)) }
++    }
++
++    private fun launchSurpriseAdventure() {
++        val choices = listOf(
++            "Daily Practice", "Learn Words", "Speak & Score", "Conversation", "Alphabet / Script",
++            "Quiz", "Story Practice", "Flashcards", "Numbers & Counting", "Listening Challenge", "Smart Review"
++        )
++        val chosen = choices.random()
++        Toast.makeText(this, "🎲 Surprise adventure: $chosen", Toast.LENGTH_SHORT).show()
++        showMode(chosen, navigate = true)
+     }
+ 
+     private fun showItemDeck(items: List<LearningItem>, helper: String) {
+         activeItems = if (items.isEmpty()) listOf(LearningItem("Hello", currentPack().hello, "👋")) else items
+-        activeIndex = 0
++        activeIndex = prefs.getInt(deckIndexKey(), 0).coerceIn(0, activeItems.lastIndex)
+         contentArea.addView(infoText(helper))
+         contentArea.addView(spacer(7))
+         renderActiveItemCard()
+@@ -430,10 +511,12 @@
+         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+         nav.addView(actionButton("◀ Previous", Color.rgb(80, 95, 120)) {
+             activeIndex = if (activeIndex == 0) activeItems.lastIndex else activeIndex - 1
++            saveDeckIndex()
+             renderActiveItemCard()
+         }, weightedButton())
+         nav.addView(actionButton("Next ▶", green) {
+             activeIndex = (activeIndex + 1) % activeItems.size
++            saveDeckIndex()
+             renderActiveItemCard()
+         }, weightedButton(dp(5), dp(5)))
+         c.addView(nav)
+@@ -611,6 +694,216 @@
+         contentArea.addView(c)
+     }
+ 
++    private fun showFlashcards() {
++        activeItems = allWordItems(currentPack())
++        activeIndex = prefs.getInt(deckIndexKey(), 0).coerceIn(0, activeItems.lastIndex)
++        flashRevealed = false
++        contentArea.addView(infoText("Tap Reveal after guessing the meaning. Use ‘I knew it’ to earn a star and build daily practice."))
++        contentArea.addView(spacer(7))
++        renderFlashcard()
++    }
++
++    private fun renderFlashcard() {
++        while (contentArea.childCount > 2) contentArea.removeViewAt(2)
++        val item = activeItems[activeIndex.coerceIn(0, activeItems.lastIndex)]
++        setCurrentItem(item)
++        val c = card(Color.WHITE, 22).apply {
++            orientation = LinearLayout.VERTICAL
++            gravity = Gravity.CENTER_HORIZONTAL
++            setPadding(dp(16), dp(18), dp(16), dp(16))
