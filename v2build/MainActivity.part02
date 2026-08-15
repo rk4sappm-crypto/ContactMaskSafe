@@ -1,0 +1,280 @@
+        actions.addView(actionButton("🎤 Speak", orange) { startListening() }, weightedButton(dp(5), dp(5)))
+        c.addView(actions)
+
+        val isFav = isFavorite(item)
+        c.addView(actionButton(if (isFav) "❤️ Saved to Favorites" else "🤍 Add to Favorites", if (isFav) green else Color.rgb(105, 115, 130)) {
+            toggleFavorite(item)
+            renderActiveItemCard()
+        }, fullButton())
+
+        val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        nav.addView(actionButton("◀ Previous", Color.rgb(80, 95, 120)) {
+            activeIndex = if (activeIndex == 0) activeItems.lastIndex else activeIndex - 1
+            renderActiveItemCard()
+        }, weightedButton())
+        nav.addView(actionButton("Next ▶", green) {
+            activeIndex = (activeIndex + 1) % activeItems.size
+            renderActiveItemCard()
+        }, weightedButton(dp(5), dp(5)))
+        c.addView(nav)
+
+        c.addView(actionButton("▶ Play this lesson", Color.rgb(103, 72, 170)) {
+            playItems(activeItems)
+        }, fullButton())
+
+        contentArea.addView(c)
+    }
+
+    private fun showConversation() {
+        val p = currentPack()
+        contentArea.addView(infoText("Listen to both sides. Then practice saying each line."))
+        contentArea.addView(spacer(7))
+        contentArea.addView(conversationBubble("🧒 Question", p.how, paleBlue, navy) { setCurrentItem(LearningItem("How are you?", p.how, "🧒")); speakText(p.how) })
+        contentArea.addView(spacer(6))
+        contentArea.addView(conversationBubble("👧 Reply", p.reply, paleOrange, orange) { setCurrentItem(LearningItem("I am fine.", p.reply, "👧")); speakText(p.reply) })
+        contentArea.addView(actionButton("🔊 Play full conversation", green) {
+            speakQueue(listOf(p.how, p.reply))
+        }, fullButton())
+        contentArea.addView(actionButton("🎤 Practice the question", orange) {
+            setCurrentItem(LearningItem("How are you?", p.how, "🧒")); startListening()
+        }, fullButton())
+        contentArea.addView(actionButton("🎤 Practice the reply", navy) {
+            setCurrentItem(LearningItem("I am fine.", p.reply, "👧")); startListening()
+        }, fullButton())
+    }
+
+    private fun conversationBubble(title: String, line: String, bg: Int, accent: Int, onListen: () -> Unit): View {
+        return card(bg, 18).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            addView(TextView(this@MainActivity).apply {
+                text = title
+                textSize = 13f
+                setTextColor(accent)
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = line
+                textSize = 25f
+                setTextColor(dark)
+                setTypeface(typeface, Typeface.BOLD)
+                textDirection = View.TEXT_DIRECTION_LOCALE
+                setPadding(0, dp(5), 0, dp(6))
+            })
+            addView(actionButton("🔊 Listen", accent, onListen), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        }
+    }
+
+    private fun showAlphabet() {
+        val p = currentPack()
+        contentArea.addView(infoText("Look at the script, listen slowly, and trace the shapes with a finger in the air."))
+        contentArea.addView(spacer(7))
+        contentArea.addView(card(Color.WHITE, 22).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(14), dp(20), dp(14), dp(20))
+            addView(TextView(this@MainActivity).apply {
+                text = "✍️ ${p.nativeName}"
+                textSize = 18f
+                setTextColor(orange)
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = p.alphabet
+                textSize = if (p.name in listOf("Chinese", "Japanese", "Korean", "Arabic", "Urdu", "Thai")) 29f else 27f
+                setTextColor(navy)
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                textDirection = View.TEXT_DIRECTION_LOCALE
+                setPadding(dp(8), dp(15), dp(8), dp(15))
+            })
+            addView(actionButton("🔊 Listen to script sample", navy) {
+                currentTarget = p.alphabet.replace("•", " ")
+                currentEnglish = "Alphabet / Script"
+                speakText(currentTarget)
+            }, fullButton())
+            addView(TextView(this@MainActivity).apply {
+                text = "Tip: For Chinese, Japanese and Korean, use this as an early character-recognition sample rather than a complete alphabet."
+                textSize = 12.5f
+                setTextColor(muted)
+                gravity = Gravity.CENTER
+                setPadding(dp(5), dp(8), dp(5), 0)
+            })
+        })
+    }
+
+    private fun showQuiz() {
+        contentArea.addView(infoText("Pick the correct translation. A correct answer earns stars."))
+        contentArea.addView(spacer(7))
+        renderQuizQuestion()
+    }
+
+    private fun renderQuizQuestion() {
+        while (contentArea.childCount > 2) contentArea.removeViewAt(2)
+        val pool = allWordItems(currentPack())
+        val question = pool.random()
+        setCurrentItem(question)
+        val wrong = pool.filter { it.target != question.target }.shuffled().take(3)
+        val options = (wrong + question).shuffled()
+
+        val c = card(Color.WHITE, 22).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(15), dp(15), dp(15), dp(15))
+        }
+        c.addView(TextView(this).apply {
+            text = "${question.emoji} What is “${question.english}” in ${currentPack().name}?"
+            textSize = 20f
+            setTextColor(navy)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, dp(12))
+        })
+        options.forEach { option ->
+            c.addView(actionButton(option.target, Color.rgb(72, 98, 145)) {
+                incrementAttempts()
+                if (option.target == question.target) {
+                    addStars(2)
+                    markDailySuccess()
+                    Toast.makeText(this@MainActivity, "Correct! +2 stars 🎉", Toast.LENGTH_SHORT).show()
+                } else {
+                    addMiss(question)
+                    Toast.makeText(this@MainActivity, "Good try. Correct answer: ${question.target}", Toast.LENGTH_LONG).show()
+                }
+                refreshHeaderStats()
+                renderQuizQuestion()
+            }, fullButton())
+        }
+        c.addView(actionButton("🔊 Hear the answer", orange) { speakText(question.target) }, fullButton())
+        contentArea.addView(c)
+    }
+
+    private fun showStoryPractice() {
+        val p = currentPack()
+        val lines = listOf(
+            LearningItem("Hello", p.hello, "👋"),
+            LearningItem("Child", p.child, "🧒"),
+            LearningItem("Book", p.book, "📘"),
+            LearningItem("School", p.school, "🏫"),
+            LearningItem("How are you?", p.how, "💬"),
+            LearningItem("I am fine.", p.reply, "😊")
+        )
+        contentArea.addView(infoText("A short bedtime-style language sequence: listen from top to bottom, then repeat the lines."))
+        contentArea.addView(spacer(7))
+        val c = card(Color.rgb(247, 241, 255), 22).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
+        c.addView(TextView(this).apply {
+            text = "🌙 A Little Language Journey"
+            textSize = 20f
+            setTextColor(Color.rgb(88, 61, 145))
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(10))
+        })
+        lines.forEach { line ->
+            c.addView(TextView(this).apply {
+                text = "${line.emoji}  ${line.target}   •   ${line.english}"
+                textSize = 17f
+                setTextColor(dark)
+                textDirection = View.TEXT_DIRECTION_LOCALE
+                setPadding(dp(4), dp(7), dp(4), dp(7))
+            })
+        }
+        c.addView(actionButton("▶ Play story practice", Color.rgb(103, 72, 170)) { playItems(lines) }, fullButton())
+        c.addView(actionButton("🎤 Practice line by line", orange) {
+            activeItems = lines
+            activeIndex = 0
+            showItemDeck(lines, "Repeat each story line and earn stars for clear speaking.")
+        }, fullButton())
+        contentArea.addView(c)
+    }
+
+    private fun showFavorites() {
+        val favorites = getFavoriteItems(currentPack().name)
+        if (favorites.isEmpty()) {
+            contentArea.addView(emptyState("🤍", "No favorites yet", "Open Learn Words or Daily Practice and tap Add to Favorites."))
+        } else {
+            showItemDeck(favorites, "Your saved words and phrases for quick revision.")
+        }
+    }
+
+    private fun showSmartReview() {
+        val all = speakingItems()
+        val reviewed = all.sortedByDescending { missCount(it) }.filter { missCount(it) > 0 }.take(8)
+        if (reviewed.isEmpty()) {
+            showItemDeck(all.take(6), "No weak words recorded yet, so Makoo is giving you a balanced starter review.")
+        } else {
+            showItemDeck(reviewed, "Makoo has placed the words with the most missed attempts first.")
+        }
+    }
+
+    private fun showParentProgress() {
+        val stars = prefs.getInt("stars", 0)
+        val attempts = prefs.getInt("attempts", 0)
+        val correct = prefs.getInt("correct", 0)
+        val streak = prefs.getInt("streak", 1)
+        val sessions = prefs.getInt("sessions", 1)
+        val accuracy = if (attempts == 0) 0 else (correct * 100 / attempts)
+        val badge = badgeFor(stars)
+        val favCount = getFavoriteItems(currentPack().name).size
+        val daily = dailyDone()
+        val goal = dailyGoal()
+
+        contentArea.addView(card(Color.WHITE, 22).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            addView(TextView(this@MainActivity).apply {
+                text = "$badge\nParent Progress"
+                textSize = 23f
+                setTextColor(navy)
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+            })
+            addView(progressLine("⭐ Total stars", stars.toString()))
+            addView(progressLine("🔥 Learning streak", "$streak day${if (streak == 1) "" else "s"}"))
+            addView(progressLine("🎯 Speaking / quiz accuracy", "$accuracy%"))
+            addView(progressLine("✅ Successful practices", correct.toString()))
+            addView(progressLine("📚 App sessions", sessions.toString()))
+            addView(progressLine("❤️ Favorites in ${currentPack().name}", favCount.toString()))
+            addView(progressLine("🌞 Today", "$daily / $goal goal"))
+            addView(TextView(this@MainActivity).apply {
+                text = "Parent tip: 5–10 focused minutes every day is usually more useful for young children than one long weekly session. Praise clear attempts, not only perfect scores."
+                textSize = 13f
+                setTextColor(muted)
+                setPadding(dp(4), dp(13), dp(4), dp(4))
+            })
+            addView(actionButton("Reset today's practice counter", Color.rgb(105, 115, 130)) {
+                prefs.edit().putInt("daily_${todayKey()}", 0).apply()
+                refreshHeaderStats()
+                showParentProgress()
+            }, fullButton())
+        })
+    }
+
+    private fun progressLine(label: String, value: String): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(2), dp(8), dp(2), dp(8))
+            addView(TextView(this@MainActivity).apply {
+                text = label
+                textSize = 14.5f
+                setTextColor(dark)
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(TextView(this@MainActivity).apply {
+                text = value
+                textSize = 14.5f
+                setTextColor(orange)
+                setTypeface(typeface, Typeface.BOLD)
+            })
+        }
+    }
+
+    private fun dailyItems(): List<LearningItem> {
+        val p = currentPack()
+        return when (ageSpinner.selectedItemPosition.coerceAtLeast(0)) {
+            0 -> listOf(
+                LearningItem("Hello", p.hello, "👋"),
+                LearningItem("Yes", p.yes, "✅"),
+                LearningItem("No", p.no, "❌"),
