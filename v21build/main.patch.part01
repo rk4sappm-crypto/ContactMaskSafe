@@ -1,0 +1,217 @@
++        }
++        c.addView(TextView(this).apply { text = item.emoji; textSize = 50f; gravity = Gravity.CENTER })
++        c.addView(TextView(this).apply {
++            text = item.target
++            textSize = 31f
++            setTextColor(navy)
++            setTypeface(typeface, Typeface.BOLD)
++            gravity = Gravity.CENTER
++            textDirection = View.TEXT_DIRECTION_LOCALE
++            setPadding(dp(4), dp(8), dp(4), dp(8))
++        })
++        c.addView(TextView(this).apply {
++            text = if (flashRevealed) item.english else "❓ Meaning hidden"
++            textSize = if (flashRevealed) 19f else 16f
++            setTextColor(if (flashRevealed) orange else muted)
++            setTypeface(typeface, if (flashRevealed) Typeface.BOLD else Typeface.NORMAL)
++            gravity = Gravity.CENTER
++            setPadding(0, 0, 0, dp(8))
++        })
++        c.addView(actionButton("🔊 Listen", navy) { speakText(item.target) }, fullButton())
++        c.addView(actionButton(if (flashRevealed) "🙈 Hide meaning" else "👀 Reveal meaning", orange) {
++            flashRevealed = !flashRevealed
++            renderFlashcard()
++        }, fullButton())
++        c.addView(actionButton("✅ I knew it • +1 star", green) {
++            addStars(1)
++            incrementAttempts()
++            incrementCorrect()
++            markDailySuccess()
++            activeIndex = (activeIndex + 1) % activeItems.size
++            saveDeckIndex()
++            flashRevealed = false
++            refreshHeaderStats()
++            renderFlashcard()
++        }, fullButton())
++        c.addView(actionButton("➡ Next card", Color.rgb(80, 95, 120)) {
++            activeIndex = (activeIndex + 1) % activeItems.size
++            saveDeckIndex()
++            flashRevealed = false
++            renderFlashcard()
++        }, fullButton())
++        contentArea.addView(c)
++    }
++
++    private fun showNumbersAndCounting() {
++        val p = currentPack()
++        val numbers = listOf(
++            LearningItem("One", p.one, "1️⃣"),
++            LearningItem("Two", p.two, "2️⃣"),
++            LearningItem("Three", p.three, "3️⃣")
++        )
++        contentArea.addView(infoText("Learn the first numbers with visual counting, listening and speaking practice."))
++        contentArea.addView(spacer(7))
++        val c = card(Color.WHITE, 22).apply {
++            orientation = LinearLayout.VERTICAL
++            setPadding(dp(15), dp(15), dp(15), dp(15))
++        }
++        c.addView(TextView(this).apply {
++            text = "🔢 Count with Makoo"
++            textSize = 22f
++            setTextColor(navy)
++            setTypeface(typeface, Typeface.BOLD)
++            gravity = Gravity.CENTER
++            setPadding(0, 0, 0, dp(10))
++        })
++        numbers.forEachIndexed { index, item ->
++            c.addView(card(if (index % 2 == 0) paleBlue else paleOrange, 16).apply {
++                orientation = LinearLayout.HORIZONTAL
++                gravity = Gravity.CENTER_VERTICAL
++                setPadding(dp(12), dp(9), dp(12), dp(9))
++                addView(TextView(this@MainActivity).apply {
++                    text = "${item.emoji}   ${"● ".repeat(index + 1).trim()}"
++                    textSize = 20f
++                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
++                addView(TextView(this@MainActivity).apply {
++                    text = item.target
++                    textSize = 23f
++                    setTextColor(navy)
++                    setTypeface(typeface, Typeface.BOLD)
++                    textDirection = View.TEXT_DIRECTION_LOCALE
++                })
++                setOnClickListener { setCurrentItem(item); speakText(item.target) }
++            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(0, dp(4), 0, dp(4)) })
++        }
++        c.addView(actionButton("🔊 Play 1 → 2 → 3", navy) { speakQueue(numbers.map { it.target }) }, fullButton())
++        c.addView(actionButton("🎤 Practice number cards", orange) {
++            activeItems = numbers
++            activeIndex = 0
++            saveDeckIndex()
++            contentArea.removeAllViews()
++            showItemDeck(numbers, "Listen and say each number clearly.")
++        }, fullButton())
++        contentArea.addView(c)
++    }
++
++    private fun showListeningChallenge() {
++        contentArea.addView(infoText("Listen without seeing the answer, then choose the English meaning. Correct answers earn stars."))
++        contentArea.addView(spacer(7))
++        renderListeningChallenge()
++    }
++
++    private fun renderListeningChallenge() {
++        while (contentArea.childCount > 2) contentArea.removeViewAt(2)
++        val pool = allWordItems(currentPack())
++        val question = pool.random()
++        setCurrentItem(question)
++        val options = (pool.filter { it.english != question.english }.shuffled().take(3) + question).shuffled()
++        val c = card(Color.rgb(242, 249, 255), 22).apply {
++            orientation = LinearLayout.VERTICAL
++            setPadding(dp(15), dp(15), dp(15), dp(15))
++        }
++        c.addView(TextView(this).apply {
++            text = "🎧 What did you hear?"
++            textSize = 22f
++            setTextColor(navy)
++            setTypeface(typeface, Typeface.BOLD)
++            gravity = Gravity.CENTER
++        })
++        c.addView(TextView(this).apply {
++            text = "Tap the speaker, then choose the meaning."
++            textSize = 13f
++            setTextColor(muted)
++            gravity = Gravity.CENTER
++            setPadding(0, dp(4), 0, dp(8))
++        })
++        c.addView(actionButton("🔊 Hear the word", navy) { speakText(question.target) }, fullButton())
++        options.forEach { option ->
++            c.addView(actionButton("${option.emoji}  ${option.english}", Color.rgb(72, 98, 145)) {
++                incrementAttempts()
++                if (option.english == question.english) {
++                    addStars(2)
++                    incrementCorrect()
++                    markDailySuccess()
++                    Toast.makeText(this@MainActivity, "Correct! It was ${question.target} • +2 stars 🎉", Toast.LENGTH_SHORT).show()
++                } else {
++                    addMiss(question)
++                    Toast.makeText(this@MainActivity, "Good try. ${question.target} means ${question.english}.", Toast.LENGTH_LONG).show()
++                }
++                refreshHeaderStats()
++                renderListeningChallenge()
++            }, fullButton())
++        }
++        contentArea.addView(c)
++        c.postDelayed({ speakText(question.target) }, 250)
++    }
++
++    private fun showAchievements() {
++        val stars = prefs.getInt("stars", 0)
++        val milestones = listOf(
++            Triple(30, "🥉 Rising Star", "Complete regular listening and speaking practice"),
++            Triple(75, "🥈 Brave Explorer", "Keep exploring different adventures"),
++            Triple(150, "🥇 Super Speaker", "Build strong pronunciation confidence"),
++            Triple(300, "🏆 Language Champion", "Reach the top Makoo badge")
++        )
++        contentArea.addView(infoText("Badges unlock automatically as stars grow. Try different adventures to make learning balanced."))
++        contentArea.addView(spacer(7))
++        val c = card(Color.WHITE, 22).apply {
++            orientation = LinearLayout.VERTICAL
++            setPadding(dp(15), dp(15), dp(15), dp(15))
++        }
++        c.addView(TextView(this).apply {
++            text = "🏅 My Achievements\n⭐ $stars stars"
++            textSize = 23f
++            setTextColor(navy)
++            setTypeface(typeface, Typeface.BOLD)
++            gravity = Gravity.CENTER
++            setPadding(0, 0, 0, dp(10))
++        })
++        milestones.forEach { (need, title, desc) ->
++            val unlocked = stars >= need
++            c.addView(card(if (unlocked) Color.rgb(235, 251, 241) else Color.rgb(247, 248, 250), 16).apply {
++                orientation = LinearLayout.VERTICAL
++                setPadding(dp(12), dp(10), dp(12), dp(10))
++                addView(TextView(this@MainActivity).apply {
++                    text = if (unlocked) "✅ $title" else "🔒 $title • $need stars"
++                    textSize = 16f
++                    setTextColor(if (unlocked) green else muted)
++                    setTypeface(typeface, Typeface.BOLD)
++                })
++                addView(TextView(this@MainActivity).apply {
++                    text = if (unlocked) "Unlocked! $desc" else "$desc • ${need - stars} more stars to unlock"
++                    textSize = 12.5f
++                    setTextColor(muted)
++                    setPadding(0, dp(3), 0, 0)
++                })
++            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(0, dp(4), 0, dp(4)) })
++        }
++        val next = milestones.firstOrNull { stars < it.first }
++        if (next != null) c.addView(actionButton("🎯 Practice for next badge", orange) { showMode("Daily Practice", navigate = true) }, fullButton())
++        else c.addView(actionButton("🎲 Try a surprise adventure", Color.rgb(103, 72, 170)) { launchSurpriseAdventure() }, fullButton())
++        contentArea.addView(c)
++    }
++
+     private fun showFavorites() {
+         val favorites = getFavoriteItems(currentPack().name)
+         if (favorites.isEmpty()) {
+@@ -659,6 +952,7 @@
+             addView(progressLine("📚 App sessions", sessions.toString()))
+             addView(progressLine("❤️ Favorites in ${currentPack().name}", favCount.toString()))
+             addView(progressLine("🌞 Today", "$daily / $goal goal"))
++            addView(progressLine("🧭 Selected adventure", currentMode))
+             addView(TextView(this@MainActivity).apply {
+                 text = "Parent tip: 5–10 focused minutes every day is usually more useful for young children than one long weekly session. Praise clear attempts, not only perfect scores."
+                 textSize = 13f
+@@ -743,6 +1037,12 @@
+         )
+     }
+ 
++    private fun deckIndexKey(): String = "deck_index_${currentPack().name}_${currentMode}".replace(Regex("[^A-Za-z0-9_]+"), "_")
++
++    private fun saveDeckIndex() {
++        prefs.edit().putInt(deckIndexKey(), activeIndex).apply()
++    }
++
+     private fun currentPack(): LanguagePack = packs[languageSpinner.selectedItemPosition.coerceIn(0, packs.lastIndex)]
+ 
+     private fun setCurrentItem(item: LearningItem) {
