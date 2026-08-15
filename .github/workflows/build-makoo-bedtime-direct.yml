@@ -1,0 +1,257 @@
+name: Build Makoo Bedtime stories APK
+
+on:
+  push:
+    branches:
+      - chatgpt-makoo-bedtime-apk-build4
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Generate Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/MakooBedtimeStories"
+          mkdir -p "$ROOT/app/src/main/java/com/ucpl/makoobedtime"
+          mkdir -p "$ROOT/app/src/main/res/drawable"
+          mkdir -p "$ROOT/app/src/main/res/values"
+
+          cat > "$ROOT/settings.gradle" <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = 'MakooBedtimeStories'
+          include ':app'
+          EOF
+
+          cat > "$ROOT/build.gradle" <<'EOF'
+          plugins { id 'com.android.application' version '8.7.3' apply false }
+          EOF
+
+          cat > "$ROOT/gradle.properties" <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=false
+          EOF
+
+          cat > "$ROOT/app/build.gradle" <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.ucpl.makoobedtime'
+              compileSdk 35
+              defaultConfig {
+                  applicationId 'com.ucpl.makoobedtime'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 20
+                  versionName '2.0.0'
+              }
+              compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+          }
+          EOF
+
+          cat > "$ROOT/app/src/main/AndroidManifest.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
+              <application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:label="Makoo Bedtime stories" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/colors.xml" <<'EOF'
+          <resources><color name="navy">#071C4A</color><color name="orange">#F26A21</color></resources>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/drawable/ic_launcher.xml" <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+              <path android:fillColor="#071C4A" android:pathData="M8,5 L8,23 C8,32 13,38 21,38 C27,38 31,35 34,30 L29,27 C27,31 25,33 21,33 C16,33 13,29 13,23 L13,5 Z"/>
+              <path android:fillColor="#F26A21" android:pathData="M34,40 C39,36 41,31 41,24 L41,12 L45,12 L39,5 L33,12 L37,12 L37,24 C37,31 36,34 32,37 Z"/>
+          </vector>
+          EOF
+
+          cat > "$ROOT/app/src/main/java/com/ucpl/makoobedtime/MainActivity.java" <<'EOF'
+          package com.ucpl.makoobedtime;
+
+          import android.app.*;
+          import android.os.*;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.content.*;
+          import android.speech.tts.TextToSpeech;
+          import android.text.*;
+          import android.view.*;
+          import android.widget.*;
+          import java.util.*;
+
+          public class MainActivity extends Activity {
+              static class Story {
+                  int id; String title, age, category, duration, moral, text;
+                  Story(int id,String t,String a,String c,String d,String m,String x){this.id=id;title=t;age=a;category=c;duration=d;moral=m;text=x;}
+              }
+
+              final ArrayList<Story> stories = new ArrayList<>();
+              final Set<Integer> favorites = new HashSet<>();
+              LinearLayout list;
+              EditText search;
+              Spinner ageSpinner, catSpinner;
+              TextToSpeech tts;
+              boolean ttsReady=false, detailOpen=false;
+              float speechRate=.90f;
+              final Handler handler = new Handler(Looper.getMainLooper());
+              Runnable sleepStop;
+              final int NAVY=Color.rgb(7,28,74), ORANGE=Color.rgb(242,106,33), BG=Color.rgb(247,247,252);
+
+              @Override public void onCreate(Bundle b){ super.onCreate(b); generateStories(); loadFavorites(); initTts(); showHome(); }
+
+              int dp(int v){ return (int)(v*getResources().getDisplayMetrics().density+.5f); }
+              TextView tv(String s,int sp,int color){ TextView t=new TextView(this); t.setText(s); t.setTextSize(sp); t.setTextColor(color); return t; }
+              Button btn(String s){ Button b=new Button(this); b.setText(s); b.setAllCaps(false); return b; }
+
+              void addBrandHeader(LinearLayout root){
+                  LinearLayout row=new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(16),dp(12),dp(16),dp(8));
+                  ImageView logo=new ImageView(this); logo.setImageResource(com.ucpl.makoobedtime.R.drawable.ic_launcher); row.addView(logo,new LinearLayout.LayoutParams(dp(58),dp(58)));
+                  LinearLayout words=new LinearLayout(this); words.setOrientation(LinearLayout.VERTICAL); words.setPadding(dp(10),0,0,0);
+                  TextView name=tv("Makoo Bedtime stories",24,NAVY); name.setTypeface(Typeface.DEFAULT,Typeface.BOLD); words.addView(name);
+                  words.addView(tv("200 Hindi audio bedtime stories for kids",14,Color.DKGRAY)); row.addView(words,new LinearLayout.LayoutParams(0,-2,1)); root.addView(row);
+                  TextView credit=tv("Designed and developed in India by UCPL Technologies",12,Color.DKGRAY); credit.setGravity(Gravity.CENTER); credit.setPadding(8,0,8,10); root.addView(credit);
+              }
+
+              void showHome(){
+                  detailOpen=false; if(tts!=null) tts.stop(); cancelTimer();
+                  LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(BG); addBrandHeader(root);
+                  search=new EditText(this); search.setHint("कहानी खोजें…"); search.setSingleLine(true); search.setPadding(dp(14),dp(8),dp(14),dp(8));
+                  LinearLayout.LayoutParams ep=new LinearLayout.LayoutParams(-1,-2); ep.setMargins(dp(12),0,dp(12),dp(8)); root.addView(search,ep);
+                  LinearLayout filters=new LinearLayout(this); filters.setPadding(dp(10),0,dp(10),dp(8));
+                  ageSpinner=new Spinner(this); catSpinner=new Spinner(this);
+                  ageSpinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"सभी उम्र","3-5","6-8","9-12"}));
+                  catSpinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"सभी श्रेणियाँ","जानवर","जादुई","दोस्ती","सीख","प्रकृति","★ पसंदीदा"}));
+                  filters.addView(ageSpinner,new LinearLayout.LayoutParams(0,-2,1)); filters.addView(catSpinner,new LinearLayout.LayoutParams(0,-2,1)); root.addView(filters);
+                  ScrollView sv=new ScrollView(this); list=new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL); list.setPadding(dp(10),0,dp(10),dp(16)); sv.addView(list); root.addView(sv,new LinearLayout.LayoutParams(-1,0,1)); setContentView(root);
+                  search.addTextChangedListener(new TextWatcher(){ public void beforeTextChanged(CharSequence s,int a,int c,int d){} public void onTextChanged(CharSequence s,int a,int b,int c){refresh();} public void afterTextChanged(Editable e){} });
+                  ageSpinner.setOnItemSelectedListener(new SimpleSel(){public void picked(){refresh();}}); catSpinner.setOnItemSelectedListener(new SimpleSel(){public void picked(){refresh();}}); refresh();
+              }
+
+              abstract class SimpleSel implements android.widget.AdapterView.OnItemSelectedListener { public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){picked();} public void onNothingSelected(android.widget.AdapterView<?> p){} abstract void picked(); }
+
+              void refresh(){
+                  if(list==null)return; list.removeAllViews(); String q=search==null?"":search.getText().toString().trim().toLowerCase(Locale.ROOT);
+                  String age=ageSpinner==null?"सभी उम्र":String.valueOf(ageSpinner.getSelectedItem()); String cat=catSpinner==null?"सभी श्रेणियाँ":String.valueOf(catSpinner.getSelectedItem());
+                  int shown=0;
+                  for(final Story s:stories){
+                      if(!age.equals("सभी उम्र")&&!s.age.equals(age))continue;
+                      if(cat.equals("★ पसंदीदा")&&!favorites.contains(s.id))continue;
+                      if(!cat.equals("सभी श्रेणियाँ")&&!cat.equals("★ पसंदीदा")&&!s.category.equals(cat))continue;
+                      if(!q.isEmpty() && !(s.title+" "+s.text+" "+s.moral).toLowerCase(Locale.ROOT).contains(q))continue;
+                      list.addView(card(s)); shown++;
+                  }
+                  if(shown==0){TextView empty=tv("कोई कहानी नहीं मिली।",17,Color.GRAY); empty.setGravity(Gravity.CENTER); empty.setPadding(10,dp(30),10,10); list.addView(empty);}
+              }
+
+              View card(final Story s){
+                  LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(dp(14),dp(12),dp(14),dp(12)); box.setBackgroundColor(Color.WHITE);
+                  LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2); bp.setMargins(0,0,0,dp(10)); box.setLayoutParams(bp);
+                  LinearLayout top=new LinearLayout(this); TextView title=tv(s.id+". "+s.title,18,NAVY); title.setTypeface(Typeface.DEFAULT,Typeface.BOLD); top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+                  Button fav=btn(favorites.contains(s.id)?"★":"☆"); fav.setTextSize(20); fav.setOnClickListener(v->{toggleFavorite(s.id); refresh();}); top.addView(fav,new LinearLayout.LayoutParams(dp(58),-2)); box.addView(top);
+                  box.addView(tv(s.age+" वर्ष • "+s.category+" • "+s.duration,13,Color.GRAY));
+                  String preview=s.text.length()>145?s.text.substring(0,145)+"…":s.text; TextView p=tv(preview,15,Color.DKGRAY); p.setPadding(0,dp(6),0,dp(6)); box.addView(p);
+                  Button listen=btn("▶ कहानी सुनें"); listen.setTextColor(NAVY); listen.setOnClickListener(v->showStory(s)); box.addView(listen); box.setOnClickListener(v->showStory(s)); return box;
+              }
+
+              void showStory(final Story s){
+                  detailOpen=true; if(tts!=null)tts.stop(); cancelTimer(); ScrollView sv=new ScrollView(this); LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(16),dp(12),dp(16),dp(24)); root.setBackgroundColor(BG); sv.addView(root);
+                  Button back=btn("← सभी कहानियाँ"); back.setOnClickListener(v->showHome()); root.addView(back); addBrandHeader(root);
+                  TextView title=tv(s.title,25,NAVY); title.setTypeface(Typeface.DEFAULT,Typeface.BOLD); root.addView(title); root.addView(tv(s.age+" वर्ष • "+s.category+" • "+s.duration,14,Color.GRAY));
+                  TextView body=tv(s.text,18,Color.DKGRAY); body.setLineSpacing(0,1.35f); body.setPadding(0,dp(16),0,dp(14)); root.addView(body);
+                  TextView moral=tv("सीख: "+s.moral,17,ORANGE); moral.setTypeface(Typeface.DEFAULT,Typeface.BOLD); root.addView(moral);
+                  LinearLayout controls=new LinearLayout(this); controls.setPadding(0,dp(14),0,0); Button play=btn("▶ सुनें"); Button stop=btn("■ रोकें"); controls.addView(play,new LinearLayout.LayoutParams(0,-2,1)); controls.addView(stop,new LinearLayout.LayoutParams(0,-2,1)); root.addView(controls);
+                  play.setOnClickListener(v->speak(s)); stop.setOnClickListener(v->{if(tts!=null)tts.stop(); cancelTimer();});
+                  TextView speedLabel=tv("आवाज़ की गति",14,Color.DKGRAY); speedLabel.setPadding(0,dp(12),0,0); root.addView(speedLabel); Spinner speed=new Spinner(this); speed.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"धीमी 0.75x","सामान्य 0.90x","तेज़ 1.05x"})); speed.setSelection(1); speed.setOnItemSelectedListener(new SimpleSel(){public void picked(){int i=speed.getSelectedItemPosition(); speechRate=i==0?.75f:(i==2?1.05f:.90f);}}); root.addView(speed);
+                  TextView timerLabel=tv("Sleep timer",14,Color.DKGRAY); timerLabel.setPadding(0,dp(8),0,0); root.addView(timerLabel); Spinner timer=new Spinner(this); timer.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"बंद","10 मिनट","20 मिनट","30 मिनट"})); timer.setOnItemSelectedListener(new SimpleSel(){public void picked(){int i=timer.getSelectedItemPosition(); cancelTimer(); if(i>0)scheduleTimer(i==1?10:(i==2?20:30));}}); root.addView(timer);
+                  setContentView(sv);
+              }
+
+              void initTts(){ tts=new TextToSpeech(this,status->{ if(status==TextToSpeech.SUCCESS){ int r=tts.setLanguage(new Locale("hi","IN")); ttsReady=r!=TextToSpeech.LANG_MISSING_DATA&&r!=TextToSpeech.LANG_NOT_SUPPORTED; }}); }
+              void speak(Story s){ if(!ttsReady){Toast.makeText(this,"Hindi Text-to-Speech voice उपलब्ध नहीं है। फोन की TTS settings में Hindi voice install करें।",Toast.LENGTH_LONG).show();return;} tts.setSpeechRate(speechRate); tts.speak(s.title+"। "+s.text+"। सीख। "+s.moral,TextToSpeech.QUEUE_FLUSH,null,"story_"+s.id); }
+              void scheduleTimer(int min){ sleepStop=()->{if(tts!=null)tts.stop(); Toast.makeText(this,"Sleep timer पूरा हुआ। शुभ रात्रि!",Toast.LENGTH_LONG).show();}; handler.postDelayed(sleepStop,min*60L*1000L); Toast.makeText(this,"Sleep timer: "+min+" मिनट",Toast.LENGTH_SHORT).show(); }
+              void cancelTimer(){ if(sleepStop!=null){handler.removeCallbacks(sleepStop);sleepStop=null;} }
+              void toggleFavorite(int id){ if(favorites.contains(id))favorites.remove(id); else favorites.add(id); saveFavorites(); }
+              void loadFavorites(){ Set<String> saved=getSharedPreferences("makoo",MODE_PRIVATE).getStringSet("favorites",Collections.emptySet()); for(String x:saved)try{favorites.add(Integer.parseInt(x));}catch(Exception ignored){} }
+              void saveFavorites(){ Set<String> out=new HashSet<>(); for(Integer i:favorites)out.add(String.valueOf(i)); getSharedPreferences("makoo",MODE_PRIVATE).edit().putStringSet("favorites",out).apply(); }
+
+              void generateStories(){
+                  String[] names={"चिंकी खरगोश","मिन्नी बिल्ली","गोलू हाथी","टिंकू कछुआ","पिहू चिड़िया","मोंटू बंदर","सोनू हिरन","गुड़िया गिलहरी","बंटी भालू","मीठू तोता","रिमझिम परी","नन्हा बादल","चंदा चूहा","लाली लोमड़ी","भोला पांडा","नीलू मोर","टप्पू मेंढक","कुक्कू कोयल","झिलमिल तारा","मोती पिल्ला"};
+                  String[] things={"चाँद की घंटी","सपनों की नाव","जादुई तकिया","तारों का दीपक","नीली पतंग","मीठी बाँसुरी","चमकीला पत्ता","हँसता बादल","रंगीन कंचा","नन्ही लालटेन"};
+                  String[] places={"चाँदनी वाला जंगल","फूलों की घाटी","शांत नदी का किनारा","तारों वाला पहाड़","आमों का बगीचा","नींद का छोटा गाँव","इंद्रधनुषी मैदान","बादलों की पहाड़ी","कमल वाला तालाब","सुगंधित वन"};
+                  String[] helpers={"बुद्धिमान उल्लू","दयालु दादी","नन्ही परी","पुराना बरगद","चमकीला जुगनू","मित्र कछुआ","हँसमुख चिड़िया","चाँद मामा","सूरज की किरण","नीली तितली"};
+                  String[] morals={"दयालुता से हर रास्ता आसान होता है।","सच्ची दोस्ती सबसे सुंदर खजाना है।","धैर्य रखने से सही समाधान मिलता है।","अपनी चीज़ें बाँटने से खुशी बढ़ती है।","सच बोलना हमेशा साहस देता है।","प्रकृति की देखभाल करना हमारी जिम्मेदारी है।","छोटी मदद भी किसी का दिन बदल सकती है।","गलती से सीखना समझदारी है।","डर को समझकर आगे बढ़ना बहादुरी है।","कृतज्ञता मन को शांत और खुश रखती है।"};
+                  String[] cats={"जानवर","जादुई","दोस्ती","सीख","प्रकृति"}; String[] ages={"3-5","6-8","9-12"};
+                  int id=1;
+                  for(int n=0;n<names.length;n++) for(int k=0;k<things.length;k++){
+                      String name=names[n], thing=things[k], place=places[(n+k)%places.length], helper=helpers[(n*3+k)%helpers.length], moral=morals[(n+k*2)%morals.length];
+                      String title=name+" और "+thing;
+                      String text="एक शांत शाम "+name+" "+place+" में टहल रहा था। वहाँ उसे "+thing+" मिला, जो हल्की रोशनी में चमक रहा था। "
+                          +"उसने उसे अपने पास रखने के बजाय पहले यह जानना चाहा कि वह किसका है। रास्ते में "+helper+" मिला और उसने कहा कि अच्छी चीज़ का असली जादू तभी दिखता है जब उसका उपयोग किसी की मदद के लिए किया जाए। "
+                          +name+" ने पास ही एक छोटे दोस्त को परेशान देखा और "+thing+" की मदद से उसका रास्ता आसान किया। थोड़ी देर में जंगल के दूसरे दोस्त भी साथ आ गए और सबने मिलकर समस्या सुलझा ली। "
+                          +"काम पूरा होने पर सबने धन्यवाद कहा। "+name+" को समझ आया कि खुशी किसी वस्तु को अकेले रखने में नहीं, बल्कि सही समय पर सही काम करने में होती है। "
+                          +"रात गहरी हुई तो वह मुस्कुराते हुए घर लौटा, आसमान के तारे गिनते-गिनते बिस्तर पर लेटा और मीठे सपनों में खो गया।";
+                      stories.add(new Story(id,title,ages[(id-1)%3],cats[(id-1)%5],(5+((id-1)%5))+" मिनट",moral,text)); id++;
+                  }
+              }
+
+              @Override public void onBackPressed(){ if(detailOpen)showHome(); else super.onBackPressed(); }
+              @Override protected void onDestroy(){ cancelTimer(); if(tts!=null){tts.stop();tts.shutdown();} super.onDestroy(); }
+          }
+          EOF
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/MakooBedtimeStories"
+          gradle --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/Makoo_Bedtime_stories_v2.0.0.apk"
+          sha256sum "$GITHUB_WORKSPACE/Makoo_Bedtime_stories_v2.0.0.apk"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Makoo-Bedtime-stories-v2.0.0-APK
+          path: Makoo_Bedtime_stories_v2.0.0.apk
+
+      - name: Publish downloadable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="makoo-bedtime-v2.0.0-android-20260815"
+          gh release delete "$TAG" -y --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG" Makoo_Bedtime_stories_v2.0.0.apk --target "$GITHUB_SHA" --title "Makoo Bedtime stories v2.0.0" --notes "Installable Android APK with 200 Hindi bedtime stories, Hindi TTS narration, Makoo branding, favorites, search, filters, narration speed and sleep timer. Designed and developed in India by UCPL Technologies."
